@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="isabrah@don01.sise.bgu.ac.il:48881">
+    <serverData>
+      <paths name="isabrah@132.72.66.162:22">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/data/home/isabrah/reddit_pycharm_proj_with_own_pc" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="isabrah@don01.sise.bgu.ac.il:48881">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/reddit_pycharm_proj_with_own_pc" local="$PROJECT_DIR$" web="/reddit_pycharm_proj_with_own_pc" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="isabrah@yalla00.ise.bgu.ac.il:48881">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/isabrah/reddit_project_sync_with_git_and_own_pc" local="$PROJECT_DIR$/../reddit_project_sync_with_git_and_yalla" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>
