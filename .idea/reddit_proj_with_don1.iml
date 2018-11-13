@@ -5,7 +5,7 @@
       <sourceFolder url="file://$MODULE_DIR$/sr_classifier" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/r_place_drawing_classifier" isTestSource="false" />
     </content>
-    <orderEntry type="jdk" jdkName="Remote Python 3.5.2 (sftp://isabrah@don01.sise.bgu.ac.il:48881/usr/bin/python3)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.6" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="PyDocumentationSettings">

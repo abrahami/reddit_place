@@ -24,6 +24,11 @@ class MetaFeaturesExtractor(TransformerMixin):
 
         #print("Finished running the transform function inside the class 'MetaFeaturesExtractor'"
         #      " The time now is {}".format(datetime.datetime.now()))
+        # iterating over the features to make sure all of them are not None
+        for cur_sr_obj in X:
+            for key, value in cur_sr_obj.explanatory_features.items():
+                if value is None:
+                    cur_sr_obj.explanatory_features[key] = 0.0
         return [cur_sr_obj.explanatory_features for cur_sr_obj in X]
 
     def fit(self, X, y=None, **fit_params):

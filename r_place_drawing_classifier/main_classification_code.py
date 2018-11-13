@@ -112,10 +112,10 @@ if __name__ == "__main__":
     # case we do not build SR objects, but rather using existing pickle file holding these objects
     else:
         sr_objects = pickle.load(open(data_path + "sr_objects_012017_to_032017_balanced.p", "rb"))
-        sr_objects = sr_objects[0:20]
+        sr_objects = sr_objects[0:1000]
         # creating the y vector feature and printing status
         y_data = []
-        for cur_sr_obj in sr_objects:
+        for idx, cur_sr_obj in enumerate(sr_objects):
             y_data += [cur_sr_obj.trying_to_draw]
             # this was used in order to create random y vector, and see results really get totally random
             # y_data += [int(np.random.choice(a=[-1, 1], size=1))]
@@ -123,6 +123,9 @@ if __name__ == "__main__":
             cur_sr_obj.explanatory_features.pop('submission_amount_normalized')
             if type(cur_sr_obj.explanatory_features['days_pazam']) is datetime.timedelta:
                 cur_sr_obj.explanatory_features['days_pazam'] = cur_sr_obj.explanatory_features['days_pazam'].days
+            #for key, value in cur_sr_obj.explanatory_features.items():
+            #    if type(value) is not int and type(value) is not float and not isinstance(value, np.float64):
+            #       print("wow")
         print("Target feature distribution is: {}".format(collections.Counter(y_data)))
         # Modeling (learning phase)
         submission_dp_obj = RedditDataPrep(is_submission_data=True, remove_stop_words=False, most_have_regex=None)
