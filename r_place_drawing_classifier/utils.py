@@ -147,3 +147,40 @@ def save_results_to_csv(start_time, SRs_amount, models_params, results, saving_p
                               'accuracy': results['accuracy'], 'precision': results['precision'],
                               'recall': results['recall']})
     rf.close()
+
+
+def examine_word(sr_object, regex_required, tokenizer, saving_file=os.getcwd()):
+    start_time = datetime.datetime.now()
+    print("examine_word function has started")
+    tot_cnt = 0
+    if sys.platform == 'linux':
+        explicit_file_name = saving_file + '/' + 'examine_word_res_regex_' + regex_required + '.txt'
+    else:
+        explicit_file_name = saving_file + '\\' + 'examine_word_res_regex_' + regex_required + '.txt'
+    if os.path.exists(explicit_file_name):
+        append_write = 'a'  # append if already exists
+    else:
+        append_write = 'w'  # make a new file if not
+    with open(explicit_file_name, append_write, encoding="utf-8") as text_file:
+        text_file.write("\n\nHere are the relevant sentences with the regex {} in SR named {}. This sr is labeled as: "
+                        "{}".format(regex_required, sr_object.name,
+                                    'not drawing' if sr_object.trying_to_draw == -1 else 'drawing'))
+
+        for subm in sr_object.submissions_as_list:
+            normalized_text = []
+            try:
+                tokenized_txt_title = tokenizer(subm[1])
+                normalized_text += tokenized_txt_title
+            except TypeError:
+                pass
+            try:
+                tokenized_txt_selftext = tokenizer(subm[2])
+                normalized_text += tokenized_txt_selftext
+            except TypeError:
+                pass
+            if regex_required in set(normalized_text):
+                text_file.write('\n' + str(subm))
+                tot_cnt +=1
+        duration = (datetime.datetime.now() - start_time).seconds
+        print("examine_word has ended, took us {} seconds."
+              "Total of {} rows were written to a text file".format(duration, tot_cnt))

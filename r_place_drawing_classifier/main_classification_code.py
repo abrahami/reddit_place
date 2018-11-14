@@ -15,7 +15,7 @@ from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from nltk.corpus import stopwords
 from sklearn.feature_extraction.stop_words import ENGLISH_STOP_WORDS
 from sr_classifier.utils import fit_model, print_n_most_informative
-from r_place_drawing_classifier.utils import get_submissions_subset, get_comments_subset, save_results_to_csv
+from r_place_drawing_classifier.utils import get_submissions_subset, get_comments_subset, save_results_to_csv, examine_word
 from data_loaders.general_loader import sr_sample
 from sr_classifier.reddit_data_preprocessing import RedditDataPrep
 from sr_classifier.sub_reddit import SubReddit
@@ -123,13 +123,16 @@ if __name__ == "__main__":
             cur_sr_obj.explanatory_features.pop('submission_amount_normalized')
             if type(cur_sr_obj.explanatory_features['days_pazam']) is datetime.timedelta:
                 cur_sr_obj.explanatory_features['days_pazam'] = cur_sr_obj.explanatory_features['days_pazam'].days
-            #for key, value in cur_sr_obj.explanatory_features.items():
-            #    if type(value) is not int and type(value) is not float and not isinstance(value, np.float64):
-            #       print("wow")
         print("Target feature distribution is: {}".format(collections.Counter(y_data)))
         # Modeling (learning phase)
         submission_dp_obj = RedditDataPrep(is_submission_data=True, remove_stop_words=False, most_have_regex=None)
         reddit_tokenizer = submission_dp_obj.tokenize_text
+        '''
+        for sr in sr_objects[80:100]:
+            examine_word(sr_object=sr, regex_required='rank', tokenizer=reddit_tokenizer,
+                         saving_file=os.getcwd())
+        print("Finished analysis phase, moving to modeling")
+        '''
         cv_res, pipeline = fit_model(sr_objects=sr_objects, y_vector=y_data, tokenizer=reddit_tokenizer,
                                      use_two_vectorizers=False, clf_model=GradientBoostingClassifier, stop_words=STOPLIST,
                                      ngram_size=2,
@@ -151,4 +154,3 @@ if __name__ == "__main__":
                                                  'ngram_features'].get_params()['steps'][1][1],
                                              pipeline.named_steps['union'].get_params()[
                                                  'numeric_meta_features'].get_params()['steps'][1][1]], clf=clf, N=20)
-

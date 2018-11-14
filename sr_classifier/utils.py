@@ -63,7 +63,7 @@ def print_n_most_informative(vectorizer, clf, N=10):
 def examine_word(examined_word, vectorizer, train_corpus, N=5, verbose=True):
     """
     helps to find sentences where a specific word appeared in. This is useful in cases when we see some output of a
-    vectorizer, and don't understand where a word came from after the tantalization process
+    vectorizer, and don't understand where a word came from after the tokanization process
     :param examined_word: str
         the word to look for - the one we should find sentences holding this word
     :param vectorizer: object
@@ -180,6 +180,7 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
         else:
             clf = clf_model(**clf_parmas)
         # pipeline creation, with feature union
+        '''
         pipeline = Pipeline([
             # Use FeatureUnion to combine the features from pure text and meta data
             ('union', FeatureUnion(
@@ -207,10 +208,30 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
             # Use the defined classifier on the combined features
             ('clf', clf),
         ])
+        '''
+        # special pipline in case we wish to run the model only with the meta-features
+        pipeline = Pipeline([
+            # Use FeatureUnion to combine the features from pure text and meta data
+            ('union', FeatureUnion(
+                transformer_list=[
+                    # Pipeline for handling numeric features (which are stored in each SR object
+                    ('numeric_meta_features', Pipeline([
+                        ('feature_extractor', MetaFeaturesExtractor()),
+                        ('vect', dict_vectorizer),  # list of dicts -> feature matrix
+                    ])),
+                ],
+
+                # weight components in FeatureUnion
+                transformer_weights={
+                    'numeric_meta_features': 1.0
+                },
+            )),
+            # Use the defined classifier on the combined features
+            ('clf', clf),
+        ])
 
     # k-fold CV using stratified strategy
     cv_obj = StratifiedKFold(n_splits=5, random_state=SEED)
-    #scoring = ['precision', 'recall', 'f1']
     scorer = MultiScorer({
         'accuracy': (accuracy_score, {}),
         'precision': (precision_score, {}),
