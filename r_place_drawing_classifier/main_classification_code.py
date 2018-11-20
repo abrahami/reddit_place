@@ -12,6 +12,7 @@ import datetime
 import pickle
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+from sklearn.neural_network import MLPClassifier
 from nltk.corpus import stopwords
 from sklearn.feature_extraction.stop_words import ENGLISH_STOP_WORDS
 from sr_classifier.utils import fit_model, print_n_most_informative
@@ -19,6 +20,9 @@ from r_place_drawing_classifier.utils import get_submissions_subset, get_comment
 from data_loaders.general_loader import sr_sample
 from sr_classifier.reddit_data_preprocessing import RedditDataPrep
 from sr_classifier.sub_reddit import SubReddit
+from multiscorer import MultiScorer
+from sklearn.metrics import accuracy_score, precision_score, recall_score
+
 
 STOPLIST = set(stopwords.words('english') + list(ENGLISH_STOP_WORDS))
 
@@ -111,7 +115,7 @@ if __name__ == "__main__":
               "Total run time is: {}".format(len(sr_objects), empty_srs, duration))
     # case we do not build SR objects, but rather using existing pickle file holding these objects
     else:
-        sr_objects = pickle.load(open(data_path + "sr_objects_012017_to_032017_balanced.p", "rb"))
+        sr_objects = pickle.load(open(data_path + "sr_objects_102016_to_032017_balanced.p", "rb"))
         sr_objects = sr_objects[0:1000]
         # creating the y vector feature and printing status
         y_data = []
@@ -134,10 +138,11 @@ if __name__ == "__main__":
         print("Finished analysis phase, moving to modeling")
         '''
         cv_res, pipeline = fit_model(sr_objects=sr_objects, y_vector=y_data, tokenizer=reddit_tokenizer,
-                                     use_two_vectorizers=False, clf_model=GradientBoostingClassifier, stop_words=STOPLIST,
+                                     use_two_vectorizers=False, clf_model=MLPClassifier, stop_words=STOPLIST,
                                      ngram_size=2,
                                      vectorizers_general_params={'max_df': 0.8, 'min_df': 3, 'max_features': 300},
-                                     clf_parmas={'random_state': SEED, 'max_depth': 3,  'n_estimators': 50})
+                                     clf_parmas={'hidden_layer_sizes': (100, 50, 10)})
+                                     #clf_parmas={'random_state': SEED, 'max_depth': 3,  'n_estimators': 50})
                                      #clf_parmas={'C': 1.0})
         save_results_to_csv(start_time=start_time, SRs_amount=len(sr_objects),
                             models_params=pipeline.steps, results=cv_res, saving_path=os.getcwd())

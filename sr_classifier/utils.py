@@ -11,7 +11,7 @@ from clean_text_transformer import CleanTextTransformer
 import datetime
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
-from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.model_selection import StratifiedKFold, cross_val_score, cross_validate
 from sklearn.pipeline import Pipeline, FeatureUnion
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
@@ -96,8 +96,9 @@ def examine_word(examined_word, vectorizer, train_corpus, N=5, verbose=True):
     return [train_corpus[i] for i in posts_idx_with_rel_word[0:N]]
 
 
-def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_model=LogisticRegression, clf_parmas=None,
-              stop_words=STOPLIST, ngram_size=2, vectorizers_general_params={'max_df': 0.8, 'min_df': 5}):
+def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_model=LogisticRegression,
+              clf_parmas=None, stop_words=STOPLIST, ngram_size=2,
+              vectorizers_general_params={'max_df': 0.8, 'min_df': 5}, ):
     """
     Training a classification model, in order to distinguish between two types of sub-reddit (SR) groups - those that
     are trying to draw something in r/place and those that don't.
@@ -180,7 +181,7 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
         else:
             clf = clf_model(**clf_parmas)
         # pipeline creation, with feature union
-        '''
+
         pipeline = Pipeline([
             # Use FeatureUnion to combine the features from pure text and meta data
             ('union', FeatureUnion(
@@ -229,24 +230,29 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
             # Use the defined classifier on the combined features
             ('clf', clf),
         ])
-
+        '''
     # k-fold CV using stratified strategy
     cv_obj = StratifiedKFold(n_splits=5, random_state=SEED)
+
+    # train and printing CV results
+    scoring = {'acc': 'accuracy',
+               'precision': 'precision',
+               'recall': 'recall'}
+    cv_results = cross_validate(estimator=pipeline, X=sr_objects, y=y_vector, n_jobs=cv_obj.n_splits,
+                                scoring=scoring, cv=cv_obj, return_train_score=False, verbose=100)
+    '''
     scorer = MultiScorer({
         'accuracy': (accuracy_score, {}),
         'precision': (precision_score, {}),
         'recall': (recall_score, {})
     })
-    # train and printing CV results
-
-    #scoring = {'acc': 'accuracy',
-    #           'prec_macro': 'precision_macro'}
-    #           #'rec_micro': 'recall_macro'}
-    #results = cross_validate(estimator=pipeline, X=sr_objects, y=y_vector,
-    #                         scoring=scoring, cv=cv_obj, return_train_score=False, verbose=100)
-
-    cross_val_score(estimator=pipeline, X=sr_objects, y=y_vector, scoring=scorer, cv=cv_obj, verbose=100)
+    cross_val_score(estimator=pipeline, X=sr_objects, y=y_vector, scoring=scorer_obj, cv=cv_obj,
+                    verbose=100, n_jobs=cv_obj.n_splits)
     results = scorer.get_results()
+    '''
+    # pulling out relevant results and giving it proper names
+    results = {'accuracy': list(cv_results['test_acc']), 'precision': list(cv_results['test_precision']),
+               'recall': list(cv_results['test_recall'])}
     duration = (datetime.datetime.now() - start_time).seconds
     print("End of fit model function. This function run took us : {} seconds".format(duration))
     return results, pipeline
