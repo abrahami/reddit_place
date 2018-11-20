@@ -4,7 +4,7 @@
 
 import sys
 if sys.platform == 'linux':
-    sys.path.append('/home/reddit_pycharm_proj_with_own_pc')
+    sys.path.append('/data/home/isabrah/reddit_project_sync_with_git_and_own_pc')
 import os
 import numpy as np
 import collections
@@ -27,7 +27,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score
 STOPLIST = set(stopwords.words('english') + list(ENGLISH_STOP_WORDS))
 
 ###################################################### Configurations ##################################################
-data_path = '/home/reddit_data/' if sys.platform == 'linux' \
+data_path = '/data/home/orentsur/data/reddit_place' if sys.platform == 'linux' \
     else 'C:\\Users\\abrahami\\Documents\\Private\\Uni\\BGU\\PhD\\reddit canvas\\data\\'
 comments_data_usage = {'meta_data': True, 'corpus': False}
 SEED = 1984
@@ -36,7 +36,7 @@ build_sr_objects = False
 if __name__ == "__main__":
     start_time = datetime.datetime.now()
     if build_sr_objects:
-        # first step will be to sample the data, then we will represent the result as a dictionary
+        # first step will be to sample the data, then we will represent the result as a dictionary here
         srs_mapping = sr_sample(data_path=data_path, sample_size='1:1', threshold_to_define_as_drawing=0.7,
                                 balanced_sampling_based_sr_size=True, internal_sr_metadata=True,
                                 sr_statistics_usage=True)
@@ -116,7 +116,7 @@ if __name__ == "__main__":
     # case we do not build SR objects, but rather using existing pickle file holding these objects
     else:
         sr_objects = pickle.load(open(data_path + "sr_objects_102016_to_032017_balanced.p", "rb"))
-        sr_objects = sr_objects[0:1000]
+        sr_objects = sr_objects[0:20]
         # creating the y vector feature and printing status
         y_data = []
         for idx, cur_sr_obj in enumerate(sr_objects):
