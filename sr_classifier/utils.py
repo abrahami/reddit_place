@@ -4,8 +4,7 @@
 
 import sys
 if sys.platform == 'linux':
-    sys.path.append('/home/reddit_pycharm_proj_with_own_pc/sr_classifier')
-from multiscorer import MultiScorer
+    sys.path.append('/data/home/isabrah/reddit_project_sync_with_git_and_own_pc/sr_classifier')
 from meta_feautres_extractor import MetaFeaturesExtractor
 from clean_text_transformer import CleanTextTransformer
 import datetime
@@ -181,7 +180,7 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
         else:
             clf = clf_model(**clf_parmas)
         # pipeline creation, with feature union
-
+        '''
         pipeline = Pipeline([
             # Use FeatureUnion to combine the features from pure text and meta data
             ('union', FeatureUnion(
@@ -230,7 +229,7 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
             # Use the defined classifier on the combined features
             ('clf', clf),
         ])
-        '''
+
     # k-fold CV using stratified strategy
     cv_obj = StratifiedKFold(n_splits=5, random_state=SEED)
 

@@ -180,7 +180,21 @@ def examine_word(sr_object, regex_required, tokenizer, saving_file=os.getcwd()):
                 pass
             if regex_required in set(normalized_text):
                 text_file.write('\n' + str(subm))
-                tot_cnt +=1
+                tot_cnt += 1
         duration = (datetime.datetime.now() - start_time).seconds
         print("examine_word has ended, took us {} seconds."
               "Total of {} rows were written to a text file".format(duration, tot_cnt))
+
+
+def remove_huge_srs(sr_objects, quantile=0.01):
+    srs_summary = [(idx, cur_sr.name, cur_sr.trying_to_draw, len(cur_sr.submissions_as_list))
+                   for idx, cur_sr in enumerate(sr_objects)]
+    srs_summary.sort(key=lambda tup: tup[3], reverse=True)  # sorts in place according to the # of submissions
+    amount_of_srs_to_remove = int(len(sr_objects)*quantile)
+    srs_to_remove_summary = srs_summary[0:amount_of_srs_to_remove]
+    drawing_removed_srs = sum([sr[2] for sr in srs_to_remove_summary if sr[2]==1])
+    srs_to_remove = set([sr[1] for sr in srs_to_remove_summary])
+    returned_list = [sr for sr in sr_objects if sr.name not in srs_to_remove]
+    print("remove_huge_srs function has ended, {} srs have been removed,"
+          " {} out of them are from class 1 (drawing)".format(len(srs_to_remove), drawing_removed_srs))
+    return returned_list

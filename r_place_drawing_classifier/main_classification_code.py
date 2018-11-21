@@ -16,18 +16,18 @@ from sklearn.neural_network import MLPClassifier
 from nltk.corpus import stopwords
 from sklearn.feature_extraction.stop_words import ENGLISH_STOP_WORDS
 from sr_classifier.utils import fit_model, print_n_most_informative
-from r_place_drawing_classifier.utils import get_submissions_subset, get_comments_subset, save_results_to_csv, examine_word
+from r_place_drawing_classifier.utils import get_submissions_subset, get_comments_subset, \
+    save_results_to_csv, examine_word, remove_huge_srs
 from data_loaders.general_loader import sr_sample
 from sr_classifier.reddit_data_preprocessing import RedditDataPrep
 from sr_classifier.sub_reddit import SubReddit
 from multiscorer import MultiScorer
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 
-
 STOPLIST = set(stopwords.words('english') + list(ENGLISH_STOP_WORDS))
 
 ###################################################### Configurations ##################################################
-data_path = '/data/home/orentsur/data/reddit_place' if sys.platform == 'linux' \
+data_path = '/data/home/orentsur/data/reddit_place/' if sys.platform == 'linux' \
     else 'C:\\Users\\abrahami\\Documents\\Private\\Uni\\BGU\\PhD\\reddit canvas\\data\\'
 comments_data_usage = {'meta_data': True, 'corpus': False}
 SEED = 1984
@@ -116,7 +116,9 @@ if __name__ == "__main__":
     # case we do not build SR objects, but rather using existing pickle file holding these objects
     else:
         sr_objects = pickle.load(open(data_path + "sr_objects_102016_to_032017_balanced.p", "rb"))
-        sr_objects = sr_objects[0:20]
+        #sr_objects = sr_objects[0:1448]
+        # function to remove huge SRs, so parallalizem can be applied
+        sr_objects = remove_huge_srs(sr_objects=sr_objects, quantile=0.01)
         # creating the y vector feature and printing status
         y_data = []
         for idx, cur_sr_obj in enumerate(sr_objects):
@@ -140,7 +142,7 @@ if __name__ == "__main__":
         cv_res, pipeline = fit_model(sr_objects=sr_objects, y_vector=y_data, tokenizer=reddit_tokenizer,
                                      use_two_vectorizers=False, clf_model=MLPClassifier, stop_words=STOPLIST,
                                      ngram_size=2,
-                                     vectorizers_general_params={'max_df': 0.8, 'min_df': 3, 'max_features': 300},
+                                     #vectorizers_general_params={'max_df': 0.8, 'min_df': 3, 'max_features': 300},
                                      clf_parmas={'hidden_layer_sizes': (100, 50, 10)})
                                      #clf_parmas={'random_state': SEED, 'max_depth': 3,  'n_estimators': 50})
                                      #clf_parmas={'C': 1.0})
