@@ -7,6 +7,7 @@ from collections import defaultdict, Counter
 import datetime
 from dateutil import parser
 
+
 class SubReddit(object):
     """
     Class to handle the process of extracting the text relevant to each Sub-Reddit (SR).
@@ -111,18 +112,6 @@ class SubReddit(object):
         """
         self.explanatory_features['submission_amount'] = submission_data.shape[0]
         try:
-            self.explanatory_features['submission_amount_normalized'] = submission_data.shape[0] * 1.0 / \
-                                                                        self.num_users * 1.0
-        except TypeError:
-            self.explanatory_features['submission_amount_normalized'] = None
-
-        #if self.num_users is int or self.num_users is float:
-        #    self.explanatory_features['submission_amount_normalized'] = submission_data.shape[0]*1.0 / \
-        #                                                                self.num_users *1.0
-        #else:
-        #    self.explanatory_features['submission_amount_normalized'] = None
-        # time related features
-        try:
             sr_pazam = datetime.datetime(2017, 3, 29).date() - self.creation_utc.date()
             self.explanatory_features['days_pazam'] = sr_pazam.days
         except AttributeError:
@@ -133,15 +122,13 @@ class SubReddit(object):
         scores_values = []
         empty_selftext_cnt = 0
         deleted_or_removed_amount = 0
+        deleted_authors = 0
         submissions_writers = defaultdict(int)
         for cur_idx, cur_sub_row in submission_data.iterrows():
             try:
                 titles_len.append(len(cur_sub_row['title']))
             except TypeError:
                 pass
-            # old way with if-else
-            #if type(cur_sub_row['title']) is str:
-            #    titles_len.append(len(cur_sub_row['title']))
             if type(cur_sub_row['score']) is int or type(cur_sub_row['score']) is float:
                 scores_values.append(cur_sub_row['score'])
             if type(cur_sub_row['selftext']) is str and \
@@ -153,46 +140,35 @@ class SubReddit(object):
                 empty_selftext_cnt += 1
             if cur_sub_row['selftext'] in {'[deleted]', '[removed]'}:
                 deleted_or_removed_amount += 1
-            if type(cur_sub_row['author']) is str and cur_sub_row['author'] != '[deleted]':
-                submissions_writers[cur_sub_row['author']] += 1
+            if type(cur_sub_row['author']) is str:
+                if cur_sub_row['author'] != '[deleted]':
+                    submissions_writers[cur_sub_row['author']] += 1
+                else:
+                    deleted_authors += 1
         # now, saving results to the sr object
-        self.explanatory_features['submission_title_length'] = np.mean(titles_len) if len(titles_len) > 0 else 0
-        self.explanatory_features['submission_selftext_length'] = np.mean(selftexts_len) if len(selftexts_len) > 0 else 0
+        self.explanatory_features['avg_submission_title_length'] = np.mean(titles_len) if len(titles_len) > 0 else 0
+        self.explanatory_features['median_submission_title_length'] = \
+            np.median(titles_len) if len(titles_len) > 0 else 0
+        self.explanatory_features['avg_submission_selftext_length'] = \
+            np.mean(selftexts_len) if len(selftexts_len) > 0 else 0
+        self.explanatory_features['median_submission_selftext_length'] = \
+            np.median(selftexts_len) if len(selftexts_len) > 0 else 0
         self.explanatory_features['submission_average_score'] = np.mean(scores_values) if len(scores_values) > 0 else 0
+        self.explanatory_features['submission_median_score'] = np.median(scores_values) if len(scores_values) > 0 else 0
         # % of empty selftext exists in submissions
-        self.explanatory_features['empty_selftext_ratio'] = empty_selftext_cnt * 1.0 / submission_data.shape[0] * 1.0
+        self.explanatory_features['empty_selftext_ratio'] = empty_selftext_cnt * 1.0 / submission_data.shape[0]
         # % of deleted or removed submissions
         self.explanatory_features['deleted_removed_submission_ratio'] = \
-            deleted_or_removed_amount * 1.0 / submission_data.shape[0] * 1.0
+            deleted_or_removed_amount * 1.0 / submission_data.shape[0]
         self.explanatory_features['submission_distinct_users'] = len(submissions_writers.keys())
         self.explanatory_features['submission_users_std'] = \
             np.std(list(submissions_writers.values())) if len(submissions_writers.values()) > 0 else None
         self.explanatory_features['average_submission_per_user'] = \
-            (submission_data.shape[0] + 1) * 1.0 / (self.explanatory_features['submission_distinct_users'] + 1) * 1.0
-        '''
-        self.explanatory_features['submission_title_length'] = np.mean([len(title) for title in submission_data['title']])
-        self.explanatory_features['submission_selftext_length'] = np.mean([len(selftext) for selftext in submission_data['selftext'] if type(selftext) is not float])
-        self.explanatory_features['submission_average_score'] = 0 if submission_data.shape[0] == 0 else np.average(submission_data['score'])
-        empty_amount = sum([1 if np.isnan(selftext) else 0 for selftext in submission_data['selftext']
-                            if type(selftext) is float])
-        self.explanatory_features['empty_selftext_ratio'] = empty_amount*1.0 / submission_data.shape[0]
-        deleted_or_removed_amount = sum([1 if selftext == '[deleted]' or selftext == '[removed]' else 0
-                                         for selftext in submission_data['selftext']])
-        self.explanatory_features['deleted_removed_submission_ratio'] = deleted_or_removed_amount * 1.0 /\
-                                                                        submission_data.shape[0]
-
-        try:
-            sr_pazam = datetime.datetime(2017, 3, 29).date() - self.creation_utc.date()
-            self.explanatory_features['days_pazam'] = sr_pazam
-        except AttributeError:
-            print("Problem calculating the sr_pazam, self.creation_utc is: ".format(self.creation_utc))
-            self.explanatory_features['days_pazam'] = None
-            pass
-        #distinct users amount feature
-        submission_dist_users = Counter([name for name in submission_data['author'] if name != '[deleted]'])
-        submission_users_std = np.std(list(submission_dist_users.values()))
-        self.explanatory_features['submission_users_std'] = submission_users_std
-        '''
+            (submission_data.shape[0] + 1) * 1.0 / (self.explanatory_features['submission_distinct_users'] + 1)
+        self.explanatory_features['median_submission_per_user'] = \
+            np.median(list(submissions_writers.values())) if len(submissions_writers) > 0 else 0
+        self.explanatory_features['submission_amount_normalized'] = \
+            submission_data.shape[0] * 1.0 / len(submissions_writers) if len(submissions_writers) > 0 else 0
         # comments related features - only relevant if we have comments data
         if comments_data is not None and comments_data.shape[0] > 0:
             body_len = []
@@ -202,18 +178,19 @@ class SubReddit(object):
             commented_comments = defaultdict(int)
             commented_submissions = defaultdict(int)
             commenting_a_submission_cnt = 0
+            self.explanatory_features['comments_amount'] = comments_data.shape[0]
             for cur_idx, cur_comm_row in comments_data.iterrows():
                 try:
                     body_len.append(len(cur_comm_row['body']))
                 except TypeError:
                     pass
-                # old way with if-else
-                #if type(cur_comm_row['body']) is str:
-                #    body_len.append(len(cur_comm_row['body']))
                 if type(cur_comm_row['score']) is int or type(cur_comm_row['score']) is float:
                     scores_values_comments.append(cur_comm_row['score'])
-                if type(cur_comm_row['author']) is str and cur_comm_row['author'] != '[deleted]':
-                    comments_writers[cur_comm_row['author']] += 1
+                if type(cur_comm_row['author']) is str:
+                    if cur_comm_row['author'] != '[deleted]':
+                        comments_writers[cur_comm_row['author']] += 1
+                    else:
+                        deleted_authors += 1
                 try:
                     if cur_comm_row['parent_id'].startswith('t3'):
                         commenting_a_submission_cnt += 1
@@ -221,16 +198,26 @@ class SubReddit(object):
                         commented_comments[cur_comm_row['parent_id']] += 1
                 except AttributeError:
                     pass
-                # old way with if-else
-                #if type(cur_comm_row['parent_id']) is str:
-                #    if cur_comm_row['parent_id'].startswith('t3'):
-                #        commenting_a_submission_cnt += 1
-                #    elif cur_comm_row['parent_id'].startswith('t1'):
-                #        commented_comments[cur_comm_row['parent_id']] += 1
                 if type(cur_comm_row['link_id']) is str:
                     commented_submissions[cur_comm_row['link_id']] += 1
                 if cur_comm_row['body'] in {'[deleted]', '[removed]'}:
                     deleted_or_removed_amount_comments += 1
+            # general comments features
+            self.explanatory_features['avg_comments_length'] = np.mean(body_len) if len(body_len) > 0 else 0
+            self.explanatory_features['median_comments_length'] = np.median(body_len) if len(body_len) > 0 else 0
+            self.explanatory_features['comments_average_score'] =\
+                np.average(scores_values_comments) if len(scores_values_comments) > 0 else 0
+            self.explanatory_features['comments_median_score'] = \
+                np.median(scores_values_comments) if len(scores_values_comments) > 0 else 0
+            self.explanatory_features['median_comments_per_user'] = \
+                np.median(list(comments_writers.values())) if len(submissions_writers) > 0 else 0
+            self.explanatory_features['deleted_removed_comments_ratio'] = deleted_or_removed_amount_comments * 1.0 / \
+                                                                          comments_data.shape[0]
+            self.explanatory_features['comments_users_std'] = \
+                np.std(list(comments_writers.values())) if len(comments_writers.values()) > 0 else None
+            self.explanatory_features['comments_amount_normalized'] = \
+                comments_data.shape[0] * 1.0 / len(comments_writers) if len(comments_writers) > 0 else 0
+            # comments features which are related to the submissions as well / users
             # adding 1 to both denominator and numerator to overcome division by zero errors
             self.explanatory_features['comments_submission_ratio'] = (comments_data.shape[0] + 1) * 1.0 /\
                                                                      (submission_data.shape[0] + 1)
@@ -241,46 +228,26 @@ class SubReddit(object):
                 (len(commented_submissions.keys()) + 1) * 1.0 / (submission_data.shape[0] + 1) * 1.0
             self.explanatory_features['distinct_comments_to_comments_ratio'] = \
                 (len(commented_comments.keys()) + 1) * 1.0 / (comments_data.shape[0] + 1) * 1.0
-            self.explanatory_features['comments_users_std'] = \
-                np.std(list(comments_writers.values())) if len(comments_writers.values()) > 0 else None
+            self.explanatory_features['submission_to_comments_words_used_ratio'] = \
+                (self.explanatory_features['avg_submission_selftext_length'] + 1)*1.0 / \
+                (self.explanatory_features['avg_comments_length']+1)
             self.explanatory_features['users_amount'] = \
                 len(set(comments_writers.keys()).union(set(submissions_writers.keys())))
-            '''
-            self.explanatory_features['com_amount'] = comments_data.shape[0]
-            #self.explanatory_features['com_amount_normalized'] = comments_data.shape[0] * 1.0 / self.num_users * 1.0
-            # comments can be empty (no relevant comments), so we must handle it case the average is nan
-            self.explanatory_features['average_comments_score'] = \
-                0 if np.isnan(np.average(comments_data['score'])) else np.average(comments_data['score'])
-            comments_dist_users = Counter([name for name in comments_data['author'] if name != '[deleted]'])
-            comments_users_std = np.std(list(comments_dist_users.values()))
-            self.explanatory_features['comments_users_std'] = comments_users_std
-            dist_users = set(submissions_writers.keys()).union(set(comments_dist_users.keys()))
-            self.explanatory_features['users_amount'] = len(dist_users)
-            self.explanatory_features['comments_submission_ratio'] = (comments_data.shape[0] + 1) * 1.0 /\
-                                                                     (submission_data.shape[0] + 1)
-            self.explanatory_features['submission_to_comments_users_ratio'] = \
-                len(set(submissions_writers.keys()))*1.0 / len(set(comments_dist_users.keys()))
-            distinct_comments_to_tot_submission_ratio = len(set(comments_data['link_id'])) * 1.0 / \
-                                                        submission_data.shape[0]
-            self.explanatory_features['distinct_comments_to_submission_ratio'] = \
-                distinct_comments_to_tot_submission_ratio
-            distinct_comments_to_tot_comments_ratio = len(set(comments_data['link_id'])) * 1.0 / comments_data.shape[0]
-            self.explanatory_features['distinct_comments_to_comments_ratio'] = distinct_comments_to_tot_comments_ratio
-            
-            commenting_upper_submission_ratio = np.mean([1 if p_id.startswith('t3') else 0 for p_id in
-                                                         comments_data['parent_id']])
-            self.explanatory_features['comment_to_upper_submission_ratio'] = commenting_upper_submission_ratio
-            self.explanatory_features['comments_body_length'] = np.mean([len(body) for body in comments_data['body']
-                                                                         if type(body) is not float])
-             % of deleted or removed submissions
-            deleted_or_removed_amount = sum([1 if body == '[deleted]' or body == '[removed]' else 0
-                                             for body in comments_data['body']])
-            self.explanatory_features['deleted_removed_comments_ratio'] = deleted_or_removed_amount * 1.0 / \
-                                                                          comments_data.shape[0]
-        '''
+            self.explanatory_features['deleted_users_normalized'] = \
+                deleted_authors * 1.0 / self.explanatory_features['users_amount'] \
+                    if self.explanatory_features['users_amount'] > 0 else 0
         # anyway, adding the users_amount feature, even if it based only on submissions data
         else:
             self.explanatory_features['users_amount'] = len(submissions_writers.keys())
+            self.explanatory_features['deleted_users_normalized'] = \
+                deleted_authors * 1.0 / self.explanatory_features['users_amount'] \
+                    if self.explanatory_features['users_amount'] > 0 else 0
+
+        '''            
+            commenting_upper_submission_ratio = np.mean([1 if p_id.startswith('t3') else 0 for p_id in
+                                                         comments_data['parent_id']])
+            self.explanatory_features['comment_to_upper_submission_ratio'] = commenting_upper_submission_ratio
+        '''
 
     def update_urls(self, urls_found):
         """
@@ -293,7 +260,8 @@ class SubReddit(object):
             only updates the instance parameters
         """
         self.urls_counter = urls_found
-        self.explanatory_features["urls_ratio"] = sum(urls_found.values())*1.0/self.explanatory_features["submission_amount"]
+        self.explanatory_features["urls_ratio"] = \
+            sum(urls_found.values())*1.0/self.explanatory_features["submission_amount"]
 
     def update_coordinates(self, coordinates_found):
         """
@@ -304,4 +272,5 @@ class SubReddit(object):
             only updates the instance parameters
         """
         self.coordinates_counter = coordinates_found
-        self.explanatory_features["coordinates_ratio"] = coordinates_found*1.0/self.explanatory_features["submission_amount"]
+        self.explanatory_features["coordinates_ratio"] = \
+            coordinates_found*1.0/self.explanatory_features["submission_amount"]

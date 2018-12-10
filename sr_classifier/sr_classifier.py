@@ -122,7 +122,7 @@ if __name__ == "__main__":
                                                           comments_data=None)
 
     # filtering out sr_objects which have zero submissions - these will probably have a label of -1 (didn't try to draw)
-    train_sr_obj_shrinked = [sr_obj for sr_obj in train_sr_obj if sr_obj.explanatory_features['sub_amount'] > 0]
+    train_sr_obj_shrinked = [sr_obj for sr_obj in train_sr_obj if sr_obj.explanatory_features['submission_amount'] > 0]
     # shuffle the data (the sr objects) so it will have different order
     idx = np.random.RandomState(seed=SEED).permutation(len(train_sr_obj_shrinked))
     train_sr_obj_shrinked = [train_sr_obj_shrinked[i] for i in idx]
@@ -165,7 +165,7 @@ if __name__ == "__main__":
 
         # filtering out sr_objects which have zero submissions -
         # these will probably have a label of -1 (didn't try to draw)
-        test_sr_obj_shrinked = [sr_obj for sr_obj in test_sr_obj if sr_obj.explanatory_features['sub_amount'] > 0]
+        test_sr_obj_shrinked = [sr_obj for sr_obj in test_sr_obj if sr_obj.explanatory_features['submission_amount'] > 0]
 
         print("\nTest Data shape after all cleaning is as follow: {} SRs are going to be used as test-set, "
               "{} SRs were removed and will be labeled as -1, since no relevant posts "

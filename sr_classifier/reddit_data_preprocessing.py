@@ -13,7 +13,42 @@ from urllib.parse import urlparse
 from collections import defaultdict
 import spacy
 
-nlp = spacy.load('en', disable=['parser', 'ner'])
+
+nlp = spacy.load('en', disable=['parser', 'ner', 'tagger'])
+
+def create_reddit_tokenizer():
+    """
+    special case which we want to recognize:
+    first two are for cases like 'r/place' or /r/place.
+    third one is for coordinates like (807, 707) (which are in a heavy usage in the r/place dataset). This once can
+    have many white spaces in-between the numbers
+
+    Testing
+    --------
+    #sample =  'r/place needs some Tlou art! ..r/place.. needs some Tlou art..Can we get Ellie somewhere on r/place?..'
+    sample = 'Help us in (720,660)! we need your help in r/place!'
+    nlp = spacy.load('en')
+    nlp.tokenizer = create_reddit_tokenizer(nlp)
+    tokens = nlp(sample)
+    print([(idx, w) for idx, w, in enumerate(tokens)])
+    """
+    my_prefix = ['r/[a-zA-Z0-9_]+', '/r/[a-zA-Z0-9_]+', '\(\s*[0-9]+\s*\,\s*[0-9]+\s*\)']
+
+    all_prefixes_re = spacy.util.compile_prefix_regex(tuple(my_prefix + list(nlp.Defaults.prefixes)))
+
+    infix_re = spacy.util.compile_infix_regex(tuple(list(nlp.Defaults.infixes)))
+
+    my_suffix = ['r/[a-zA-Z0-9_]+', '/r/[a-zA-Z0-9_]+', '\(\s*[0-9]+\s*\,\s*[0-9]+\s*\)']
+    suffix_re = spacy.util.compile_suffix_regex(tuple(my_suffix + list(nlp.Defaults.suffixes)))
+
+    # reddit_special_cases = re.compile(r'\([0-9]+\,[0-9]+\)')
+    return Tokenizer(nlp.vocab, nlp.Defaults.tokenizer_exceptions,
+                     prefix_search=all_prefixes_re.search,
+                     infix_finditer=infix_re.finditer, suffix_search=suffix_re.search,
+                     token_match=None)  # reddit_special_cases.match)
+
+
+nlp.tokenizer = create_reddit_tokenizer()
 STOPLIST = set(stopwords.words('english') + list(ENGLISH_STOP_WORDS))
 SYMBOLS = " ".join(string.punctuation).split(" ") + ["-", "..", "...", "....", ".....", "......" "”", "”"]
 
@@ -177,7 +212,6 @@ class RedditDataPrep(object):
             list of tokens
         """
 
-        nlp.tokenizer = self.create_reddit_tokenizer()
         sample_as_list = self._break_long_text(sample=sample, chunks_size=500000)
         full_tokens_list = []
         for cur_sample in sample_as_list:
@@ -284,38 +318,6 @@ class RedditDataPrep(object):
         # converting it to a str object
         revised_text = "".join(revised_text)
         return revised_text, coordinates_found
-
-    @classmethod
-    def create_reddit_tokenizer(cls):
-        """
-        special case which we want to recognize:
-        first two are for cases like 'r/place' or /r/place.
-        third one is for coordinates like (807, 707) (which are in a heavy usage in the r/place dataset). This once can
-        have many white spaces in-between the numbers
-
-        Testing
-        --------
-        #sample =  'r/place needs some Tlou art! ..r/place.. needs some Tlou art..Can we get Ellie somewhere on r/place?..'
-        sample = 'Help us in (720,660)! we need your help in r/place!'
-        nlp = spacy.load('en')
-        nlp.tokenizer = create_reddit_tokenizer(nlp)
-        tokens = nlp(sample)
-        print([(idx, w) for idx, w, in enumerate(tokens)])
-        """
-        my_prefix = ['r/[a-zA-Z0-9_]+', '/r/[a-zA-Z0-9_]+', '\(\s*[0-9]+\s*\,\s*[0-9]+\s*\)']
-
-        all_prefixes_re = spacy.util.compile_prefix_regex(tuple(my_prefix + list(nlp.Defaults.prefixes)))
-
-        infix_re = spacy.util.compile_infix_regex(tuple(list(nlp.Defaults.infixes)))
-
-        my_suffix = ['r/[a-zA-Z0-9_]+', '/r/[a-zA-Z0-9_]+', '\(\s*[0-9]+\s*\,\s*[0-9]+\s*\)']
-        suffix_re = spacy.util.compile_suffix_regex(tuple(my_suffix + list(nlp.Defaults.suffixes)))
-
-        # reddit_special_cases = re.compile(r'\([0-9]+\,[0-9]+\)')
-        return Tokenizer(nlp.vocab, nlp.Defaults.tokenizer_exceptions,
-                         prefix_search=all_prefixes_re.search,
-                         infix_finditer=infix_re.finditer, suffix_search=suffix_re.search,
-                         token_match=None)#reddit_special_cases.match)
 
     @classmethod
     def _break_long_text(cls, sample, chunks_size):

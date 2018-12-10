@@ -10,6 +10,8 @@ import collections
 import pickle
 import sys
 import csv
+import warnings
+warnings.filterwarnings("ignore")
 
 
 def get_submissions_subset(files_path, srs_to_include):
@@ -37,6 +39,9 @@ def get_submissions_subset(files_path, srs_to_include):
         cur_submission_df = cur_submission_df[cur_submission_df["subreddit"].str.lower().isin(srs_to_include)]
         cur_submission_df = cur_submission_df[cur_submission_df['created_utc_as_date'] < '2017-03-29 00:00:00']
         submission_dfs.append(cur_submission_df)
+    if len(submission_dfs) == 0:
+        raise IOError("No submission file was found")
+
     full_submissions_df = pd.concat(submission_dfs)
     duration = (datetime.datetime.now() - start_time).seconds
     print("Function 'get_submission_subset_dataset' has ended. Took us : {} seconds. "
@@ -67,10 +72,12 @@ def get_comments_subset(files_path, srs_to_include):
             cur_comments_df = pd.read_csv(filepath_or_buffer=files_path + cur_comments_file, encoding='latin-1')
         cur_comments_df = cur_comments_df[cur_comments_df["subreddit"].str.lower().isin(srs_to_include)]
         comments_dfs.append(cur_comments_df)
+    if len(comments_dfs) == 0:
+        raise IOError("No comments file were found")
     full_comments_df = pd.concat(comments_dfs)
     duration = (datetime.datetime.now() - start_time).seconds
     print("Function 'get_comments_subset' has ended. Took us : {} seconds. "
-          "Submission data-frame shape created is {}".format(duration, full_comments_df.shape))
+          "Comments data-frame shape created is {}".format(duration, full_comments_df.shape))
     return full_comments_df
 
 

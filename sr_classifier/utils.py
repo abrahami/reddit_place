@@ -10,17 +10,17 @@ from clean_text_transformer import CleanTextTransformer
 import datetime
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
-from sklearn.model_selection import StratifiedKFold, cross_val_score, cross_validate
+from sklearn.model_selection import StratifiedKFold, cross_val_score, cross_validate, cross_val_predict
 from sklearn.pipeline import Pipeline, FeatureUnion
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from nltk.corpus import stopwords
 from sklearn.feature_extraction.stop_words import ENGLISH_STOP_WORDS
 from sklearn.metrics import accuracy_score, precision_score, recall_score
+from sklearn.preprocessing import Imputer
 
 STOPLIST = set(stopwords.words('english') + list(ENGLISH_STOP_WORDS))
 SEED = 1984
-
 
 def print_n_most_informative(vectorizer, clf, N=10):
     """
@@ -123,9 +123,10 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
         ngrams sequence to be used in the vectorizer.
     :param vectorizers_general_params: dict or None, default = {'max_df': 0.8, 'min_df': 5}
         hyper parameters to be used in the vectorizer object. Will be passes with the ** operation into the object
-    :return: tuple (with 2 elements)
+    :return: tuple (with 3 elements)
         results - results of the model as returned by the 'cross_validate' object
         pipeline - the pipline object which was used for training (after the fit process)
+        predictions - the prediciton to each sr, based on the cv we ran
     """
     start_time = datetime.datetime.now()
     ctt = CleanTextTransformer(marking_method={'urls': 'replace', 'coordinates': 'replace'})
@@ -158,6 +159,7 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
                     ('numeric_meta_features', Pipeline([
                         ('feature_extractor', MetaFeaturesExtractor()),
                         ('vect', dict_vectorizer),  # list of dicts -> feature matrix
+                        ('imputer', Imputer(strategy="mean", axis=0))
                     ])),
 
                 ],
@@ -180,7 +182,6 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
         else:
             clf = clf_model(**clf_parmas)
         # pipeline creation, with feature union
-        '''
         pipeline = Pipeline([
             # Use FeatureUnion to combine the features from pure text and meta data
             ('union', FeatureUnion(
@@ -195,6 +196,7 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
                     ('numeric_meta_features', Pipeline([
                         ('feature_extractor', MetaFeaturesExtractor()),
                         ('vect', dict_vectorizer),  # list of dicts -> feature matrix
+                        ('imputer', Imputer(strategy="mean", axis=0))
                     ])),
 
                 ],
@@ -218,6 +220,7 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
                     ('numeric_meta_features', Pipeline([
                         ('feature_extractor', MetaFeaturesExtractor()),
                         ('vect', dict_vectorizer),  # list of dicts -> feature matrix
+                        ('imputer', Imputer(strategy="mean", axis=0))
                     ])),
                 ],
 
@@ -229,6 +232,7 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
             # Use the defined classifier on the combined features
             ('clf', clf),
         ])
+        '''
 
     # k-fold CV using stratified strategy
     cv_obj = StratifiedKFold(n_splits=5, random_state=SEED)
@@ -239,6 +243,8 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
                'recall': 'recall'}
     cv_results = cross_validate(estimator=pipeline, X=sr_objects, y=y_vector, n_jobs=cv_obj.n_splits,
                                 scoring=scoring, cv=cv_obj, return_train_score=False, verbose=100)
+    cross_val_predictions = cross_val_predict(estimator=pipeline, X=sr_objects, y=y_vector,
+                                              cv=cv_obj, method='predict_proba', n_jobs=cv_obj.n_splits)
     '''
     scorer = MultiScorer({
         'accuracy': (accuracy_score, {}),
@@ -254,7 +260,7 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
                'recall': list(cv_results['test_recall'])}
     duration = (datetime.datetime.now() - start_time).seconds
     print("End of fit model function. This function run took us : {} seconds".format(duration))
-    return results, pipeline
+    return results, pipeline, cross_val_predictions
 
 
 def predict_model(pipeline, sr_objects, predict_proba=True):
