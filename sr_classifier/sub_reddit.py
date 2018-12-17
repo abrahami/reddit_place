@@ -3,9 +3,12 @@
 # Last update: 9.10.2018
 
 import numpy as np
+import pandas as pd
 from collections import defaultdict, Counter
 import datetime
 from dateutil import parser
+import pickle
+from pandas.io.json import json_normalize
 
 
 class SubReddit(object):
@@ -274,3 +277,51 @@ class SubReddit(object):
         self.coordinates_counter = coordinates_found
         self.explanatory_features["coordinates_ratio"] = \
             coordinates_found*1.0/self.explanatory_features["submission_amount"]
+
+    def meta_features_handler(self, features_to_exclude=None, features_to_include=None, smooth_zero_features=True,
+                              network_features=None):
+        '''
+        aligning the meta features of each sr, so it can be used later in modeling phase. This is not a mandatory
+        phase of the data-prep at all
+        :param features_to_exclude: list (of strings). Default: None
+            names of features which need to be removed from the meta-featurs list. Such features are ones we don't
+            want to be used along modeling due to different reasons.
+            If None - all features are included
+        :param smooth_zero_features: bool. Default: True
+            converting zero value features to the smallest value (positive) we can. This is useful in case we
+            run DL models, and the gradient cannot converge with zero divided by zero cases
+        :param network_features: bool. Default: None
+            full path (including the file name) to the pickle file holding the network meta features information.
+            The format of the pickle file should be dictionary of dictionaries. The first dict contains the SR names
+            as key, and the value is another dict which holds the feature names+values
+        :return:
+        '''
+        # add the network features to the list of features we use in modeling
+        if network_features is not None:
+            graph_meta_features = pickle.load(open(network_features, "rb"))
+            try:
+                cur_features = pd.Series(json_normalize(graph_meta_features[self.name]).iloc[0])
+                cur_features = dict(cur_features.to_dict())
+                # adding a 'network_' test in from of the new network features, so we can identify them later
+                cur_features = {'network_'+key: value for key, value in cur_features.items()}
+                self.explanatory_features.update(cur_features)
+            # case the name doesn't exist in the dictionary
+            except KeyError:
+                return -1
+        if features_to_exclude is not None:
+            for f in features_to_exclude:
+                try:
+                    self.explanatory_features.pop(f)
+                # case the feature provided doesn't exist
+                except KeyError:
+                    continue
+        if features_to_include is not None:
+            missing_features = set(features_to_include) - set(self.explanatory_features.keys())
+            self.explanatory_features.update({n: None for n in missing_features})
+        if smooth_zero_features:
+            for key, value in self.explanatory_features.items():
+                if value == 0.0:
+                    self.explanatory_features[key] = np.finfo(np.float).eps
+        return 0
+
+

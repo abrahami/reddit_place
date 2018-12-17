@@ -2,32 +2,33 @@
 # Python version: 3.7
 # Last update: 21.11.2018
 
+
 import dynet_config
 # set random seed to have the same result each time
-dynet_config.set(random_seed=1984)
+dynet_config.set(random_seed=1984, mem="4096")
 import dynet as dy
 from collections import defaultdict
 import time
 import random
 import numpy as np
 import pandas as pd
-import pickle
-import sys
 from sr_classifier.reddit_data_preprocessing import RedditDataPrep
 from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_auc_score
 import collections
 import datetime
-from r_place_drawing_classifier.utils import remove_huge_srs
+from sklearn.preprocessing import Imputer
 
 
 class NNClassifier(object):
     """
     """
 
-    def __init__(self, model_type='lstm', emb_size=100, hid_size=100, epochs=10, use_bilstm=False,
-                 model_sentences = False, seed=1984):
+    def __init__(self, tokenizer, model_type='lstm', emb_size=100, hid_size=100, epochs=10, use_bilstm=False,
+                 use_meta_features=True, model_sentences=False, maximum_sent_per_sr=10, seed=1984):
+        self.tokenizer=tokenizer
         self.model_type = model_type
         self.use_bilstm = use_bilstm
+        self.use_meta_features=use_meta_features
         self.epochs = epochs
         # Functions to read in the corpus
         self.w2i = defaultdict(lambda: len(self.w2i))
@@ -38,30 +39,34 @@ class NNClassifier(object):
         self.emb_size = emb_size
         self.hid_size = hid_size
         self.model_sentences = model_sentences
+        self.maximum_sent_per_sr=maximum_sent_per_sr
         self.seed = seed
         random.seed(self.seed)
         self.eval_measures = dict()
 
-    def get_reddit_sentences(self, sr_objects, tokenizer, maximum_sent_per_sr=5000):
+    def get_reddit_sentences(self, sr_objects):
         # looping over all sr objects
         for cur_sr in sr_objects:
             # pulling out the tag of the current sr
             tag = cur_sr.trying_to_draw
-            if maximum_sent_per_sr is not None:
+            if self.maximum_sent_per_sr is not None:
+                cur_sr.submissions_as_list.sort(key=lambda tup: tup[0], reverse=True)
                 cur_sr_sentences = [i[1] for idx, i in enumerate(cur_sr.submissions_as_list) if
-                                    idx < maximum_sent_per_sr]
+                                             idx < self.maximum_sent_per_sr and type(i[1]) is str]
+                #cur_sr_sentences = reversed([i[1] for idx, i in enumerate(reversed(cur_sr.submissions_as_list)) if
+                #                             idx < maximum_sent_per_sr and type(i[1]) is str])
             else:
-                cur_sr_sentences = [i[1] for i in cur_sr.submissions_as_list]
+                cur_sr_sentences = [i[1] for i in cur_sr.submissions_as_list if type(i[1]) is str]
 
             if self.model_sentences:
                 for sen in cur_sr_sentences:
-                    sen_tokenized = tokenizer(sen)
+                    sen_tokenized = self.tokenizer(sen)
                     if len(sen_tokenized) > 0:
                         yield ([self.w2i[x] for x in sen_tokenized], self.t2i[tag], cur_sr.name)
             else:
                 cur_sr_sentences_as_int = []
                 for sen in cur_sr_sentences:
-                    sen_tokenized = tokenizer(sen)
+                    sen_tokenized = self.tokenizer(sen)
                     if len(sen_tokenized) > 0:
                         cur_sr_sentences_as_int.append([self.w2i[x] for x in sen_tokenized])
                 yield (cur_sr_sentences_as_int, self.t2i[tag], cur_sr.name)
@@ -95,8 +100,100 @@ class NNClassifier(object):
         self.ntags = len(self.t2i)
         return train, dev
 
+    def data_prep_meta_features(self, train_meta_features, test_meta_features):
+        imp_obj = Imputer(strategy='mean', copy=False)
+        train_as_df = pd.DataFrame.from_dict(train_meta_features, orient='index')
+        test_as_df = pd.DataFrame.from_dict(test_meta_features, orient='index')
+        train_as_df = pd.DataFrame(imp_obj.fit_transform(train_as_df), columns=train_as_df.columns, index=train_as_df.index)
+        test_as_df = pd.DataFrame(imp_obj.transform(test_as_df), columns=test_as_df.columns, index=test_as_df.index)
+        train_meta_features_imputed = train_as_df.to_dict('index')
+        test_meta_features_imputed = test_as_df.to_dict('index')
+        return {key: collections.defaultdict(None, value) for key, value in train_meta_features_imputed.items()}, \
+               {key: collections.defaultdict(None, value) for key, value in test_meta_features_imputed.items()},
+
+    def build_embedding_matrix(self, embedding_file):
+        start_time = datetime.datetime.now()
+        embedding_matrix = np.random.normal(loc=0.0, scale=1.0, size=(self.nwords + 1, self.emb_size))
+        embeddings_index = dict()
+        found_words = 0
+        #print("We are in the 'build_embedding_matrix' function")
+        with open(embedding_file) as infile:
+            for idx, line in enumerate(infile):
+                values = line.split()
+                word = values[0]
+                coefs = np.asarray(values[1:], dtype='float32')
+                embeddings_index[word] = coefs
+                # updating the embedding matrix according to the w2i dictionary
+                if word in self.w2i:
+                    embedding_matrix[self.w2i[word]] = coefs
+                    found_words += 1
+            infile.close()
+        duration = (datetime.datetime.now() - start_time).seconds
+        print("We have finished running the 'build_embedding_matrix' function. Took us {0:.2f} seconds. "
+              "We have found {1:.1f}% of matching words "
+              "compared to the embedding matrix.".format(duration, found_words * 100.0 / self.nwords))
+        return embedding_matrix
+
+    def _predict_simple_mlp(self, pU, pb, pv, x):
+        U = dy.parameter(pU)
+        b = dy.parameter(pb)
+        v = dy.parameter(pv)
+        y = dy.logistic(dy.dot_product(v, dy.tanh(U * x + b)))
+        return y
+
+    def fit_simple_mlp(self, train_data, test_data):
+        random.seed(self.seed)
+        random.shuffle(train_data)
+        train_meta_features = {sr_obj.name: sr_obj.explanatory_features for sr_obj in train_data}
+        test_meta_features = {sr_obj.name: sr_obj.explanatory_features for sr_obj in test_data}
+        train_meta_data, test_meta_data = self.data_prep_meta_features(train_meta_features=train_meta_features,
+                                                                       test_meta_features=test_meta_features)
+        y_train = [sr_obj.trying_to_draw for sr_obj in train_data]
+        y_test = [sr_obj.trying_to_draw for sr_obj in test_data]
+        meta_data_dim = len(list(train_meta_data[list(train_meta_data.keys())[0]]))
+        # Start DyNet and define trainer
+        model = dy.Model()
+        trainer = dy.AdamTrainer(model)
+
+        pU = model.add_parameters((meta_data_dim, self.ntags))
+        pb = model.add_parameters(meta_data_dim)
+        pv = model.add_parameters(meta_data_dim)
+        closs = 0.0
+        for ITER in range(self.epochs):
+            # Perform training
+
+            train_loss = 0.0
+            start = time.time()
+            for idx, (cur_x, tag) in enumerate(zip(train_meta_data, y_train)):
+                # create graph for computing loss
+                dy.renew_cg()
+                y_hat = self._predict_simple_mlp(pU=pU, pb=pb, pv=pv, x=cur_x)
+                # loss
+                if tag == 0:
+                    loss = -dy.log(1 - y_hat)
+                elif tag == 1:
+                    loss = -dy.log(y_hat)
+
+                closs += loss.scalar_value()  # forward
+                loss.backward()
+                trainer.update()
+            print("iter %r: train loss/sent=%.4f, time=%.2fs" % (ITER, train_loss / len(y_train), time.time() - start))
+            # Perform testing validation
+            test_correct = 0.0
+            for cur_x, tag in zip(test_data, y_test):
+                y_hat = self._predict_simple_mlp(pU=pU, pb=pb, pv=pv, x=cur_x)
+                if y_hat >= .5 and tag == 1 or y_hat <= .5 and tag == 0:
+                    test_correct += 1
+            print("iter %r: test acc=%.4f" % (ITER, test_correct / len(y_test)))
+        # Perform testing validation after all batches ended
+        all_scores = []
+        for cur_x, tag in zip(test_data, y_test):
+            y_hat = self._predict_simple_mlp(pU=pU, pb=pb, pv=pv, x=cur_x)
+            all_scores.append(y_hat)
+        return all_scores
+
     # A function to calculate scores for one value
-    def _calc_scores(self, words, W_emb, fwdLSTM, bwdLSTM, W_sm, b_sm, normalize_results=True):
+    def _calc_scores_single_layer_lstm(self, words, W_emb, fwdLSTM, bwdLSTM, W_sm, b_sm, normalize_results=True):
         dy.renew_cg()
         word_embs = [dy.lookup(W_emb, x) for x in words]
         fwd_init = fwdLSTM.initial_state()
@@ -113,13 +210,18 @@ class NNClassifier(object):
         else:
             return score_not_normalized
 
-    def fit_model(self, train, test):
+    def fit_single_layer_lstm(self, train, test, embedding_file=None):
         # Start DyNet and define trainer
         model = dy.Model()
         trainer = dy.AdamTrainer(model)
 
         # Define the model
-        W_emb = model.add_lookup_parameters((self.nwords, self.emb_size))   # Word embeddings
+        # Word embeddings part
+        if embedding_file is None:
+            W_emb = model.add_lookup_parameters((self.nwords, self.emb_size))
+        else:
+            external_embedding = self.build_embedding_matrix(embedding_file)
+            W_emb = model.add_lookup_parameters((self.nwords, self.emb_size), init=external_embedding)
         fwdLSTM = dy.LSTMBuilder(1, self.emb_size, self.hid_size, model)    # Forward LSTM
         bwdLSTM = dy.LSTMBuilder(1, self.emb_size, self.hid_size, model)    # Backward LSTM
         if self.use_bilstm:
@@ -129,13 +231,14 @@ class NNClassifier(object):
         b_sm = model.add_parameters(self.ntags)                               # Softmax bias
         for ITER in range(self.epochs):
             # Perform training
+            random.seed(self.seed)
             random.shuffle(train)
             train_loss = 0.0
             start = time.time()
             for idx, (words, tag) in enumerate(train):
-                my_loss = dy.pickneglogsoftmax(self._calc_scores(words=words, W_emb=W_emb, fwdLSTM=fwdLSTM,
-                                                                 bwdLSTM=bwdLSTM, W_sm=W_sm, b_sm=b_sm,
-                                                                 normalize_results=True), tag)
+                my_loss = dy.pickneglogsoftmax(self._calc_scores_single_layer_lstm(words=words, W_emb=W_emb, fwdLSTM=fwdLSTM,
+                                                                                   bwdLSTM=bwdLSTM, W_sm=W_sm, b_sm=b_sm,
+                                                                                   normalize_results=True), tag)
                 train_loss += my_loss.value()
                 my_loss.backward()
                 trainer.update()
@@ -143,8 +246,8 @@ class NNClassifier(object):
             # Perform testing validation
             test_correct = 0.0
             for words, tag in test:
-                scores = self._calc_scores(words=words, W_emb=W_emb, fwdLSTM=fwdLSTM,
-                                           bwdLSTM=bwdLSTM, W_sm=W_sm, b_sm=b_sm).npvalue()
+                scores = self._calc_scores_single_layer_lstm(words=words, W_emb=W_emb, fwdLSTM=fwdLSTM,
+                                                             bwdLSTM=bwdLSTM, W_sm=W_sm, b_sm=b_sm).npvalue()
                 predict = np.argmax(scores)
                 if predict == tag:
                     test_correct += 1
@@ -152,12 +255,12 @@ class NNClassifier(object):
         # Perform testing validation after all batches ended
         all_scores = []
         for words, tag in test:
-            cur_score = self._calc_scores(words=words, W_emb=W_emb, fwdLSTM=fwdLSTM,
-                                          bwdLSTM=bwdLSTM, W_sm=W_sm, b_sm=b_sm, normalize_results=True).npvalue()
+            cur_score = self._calc_scores_single_layer_lstm(words=words, W_emb=W_emb, fwdLSTM=fwdLSTM,
+                                                            bwdLSTM=bwdLSTM, W_sm=W_sm, b_sm=b_sm, normalize_results=True).npvalue()
             all_scores.append(cur_score)
         return all_scores
 
-    def evaluate_model(self, dl_model_scores, sr_objects, ):
+    def evaluate_model(self, dl_model_scores, sr_objects):
         sr_name_with_y = {sr.name: sr.trying_to_draw for sr in sr_objects}
         sr_names = [sr.name for sr in sr_objects]
         y_data = [sr.trying_to_draw for sr in sr_objects]
@@ -201,52 +304,9 @@ class NNClassifier(object):
 
         return self.eval_measures
 
-
 ########################################################################################################################
-    def fit_two_layers_model(self, train, test):
-        # Start DyNet and define trainer
-        model = dy.Model()
-        trainer = dy.AdamTrainer(model)
-
-        # Define the model
-        W_emb = model.add_lookup_parameters((self.nwords, self.emb_size))      # Word embeddings
-        first_lstm = dy.LSTMBuilder(1, self.emb_size, self.hid_size, model)    # Forward LSTM
-        second_lstm = dy.LSTMBuilder(1, self.hid_size, self.hid_size, model)
-        W_sm = model.add_parameters((self.ntags, self.hid_size))               # Softmax weights
-        b_sm = model.add_parameters(self.ntags)                                # Softmax bias
-        for ITER in range(self.epochs):
-            # Perform training
-            random.shuffle(train)
-            train_loss = 0.0
-            start = time.time()
-            for idx, (sentences, tag) in enumerate(train):
-                my_loss = dy.pickneglogsoftmax(self._calc_scores_two_layers(sentences=sentences, W_emb=W_emb,
-                                                                            first_lstm=first_lstm,
-                                                                            second_lstm=second_lstm, W_sm=W_sm,
-                                                                            b_sm=b_sm, normalize_results=True), tag)
-                train_loss += my_loss.value()
-                my_loss.backward()
-                trainer.update()
-            print("iter %r: train loss/sent=%.4f, time=%.2fs" % (ITER, train_loss / len(train), time.time() - start))
-            # Perform testing validation
-            test_correct = 0.0
-            for words, tag in test:
-                scores = self._calc_scores_two_layers(sentences=words, W_emb=W_emb, first_lstm=first_lstm,
-                                                      second_lstm=second_lstm, W_sm=W_sm, b_sm=b_sm).npvalue()
-                predict = np.argmax(scores)
-                if predict == tag:
-                    test_correct += 1
-            print("iter %r: test acc=%.4f" % (ITER, test_correct / len(test)))
-        # Perform testing validation after all batches ended
-        all_scores = []
-        for words, tag in test:
-            cur_score = self._calc_scores_two_layers(sentences=words, W_emb=W_emb, first_lstm=first_lstm,
-                                                     second_lstm=second_lstm, W_sm=W_sm, b_sm=b_sm,
-                                                     normalize_results=True).npvalue()
-            all_scores.append(cur_score)
-        return all_scores
-
-    def _calc_scores_two_layers(self, sentences, W_emb, first_lstm, second_lstm, W_sm, b_sm, normalize_results=True):
+    def _calc_scores_two_layers(self, sentences, W_emb, first_lstm, second_lstm, W_sm, b_sm,
+                                meta_data=None, normalize_results=True):
         dy.renew_cg()
         sentences_len = len(sentences)
         word_embs = [[dy.lookup(W_emb, w) for w in words] for words in sentences]
@@ -255,16 +315,105 @@ class NNClassifier(object):
         for wb in word_embs:
             first_embs.append(first_init.transduce(wb))
         last_comp_in_first_layer = [i[-1] for i in first_embs]
-        second_init = second_lstm.initial_state()
-        second_lstm_calc = second_init.transduce(last_comp_in_first_layer)
-        score_not_normalized = W_sm * dy.concatenate([second_lstm_calc[-1]]) + b_sm
-        if normalize_results:
-            return dy.softmax(score_not_normalized)
+        if second_lstm is not None:
+            second_init = second_lstm.initial_state()
+            second_lstm_calc = second_init.transduce(last_comp_in_first_layer)
+            score_not_normalized = W_sm * dy.concatenate([second_lstm_calc[-1]]) + b_sm
+            if normalize_results:
+                return dy.softmax(score_not_normalized)
+            else:
+                return score_not_normalized
+        # case we want to claculate the average of all the tensors instead of building another layer
         else:
-            return score_not_normalized
-        pass
+            first_layer_avg = dy.average(last_comp_in_first_layer)
+            if meta_data is None:
+                score_not_normalized = W_sm * first_layer_avg + b_sm
+            else:
+                meta_data_ordered = [value for key, value in sorted(meta_data.items())]
+                meta_data_vector = dy.inputVector(meta_data_ordered)
+                first_layer_avg_and_meta_data = dy.concatenate([first_layer_avg, meta_data_vector])
+                score_not_normalized = W_sm * first_layer_avg_and_meta_data + b_sm
+            if normalize_results:
+                return dy.softmax(score_not_normalized)
+            else:
+                return score_not_normalized
 
+    def fit_two_layers_lstm(self, train_data, test_data, embedding_file=None, second_layer_as_lstm=True):
+        train_data_for_dynet = list(self.get_reddit_sentences(sr_objects=train_data))
+        train_data_names = [i[2] for i in train_data_for_dynet]
+        train_data_for_dynet = [(i[0], i[1]) for i in train_data_for_dynet]
 
+        test_data_for_dynet = list(self.get_reddit_sentences(sr_objects=test_data))
+        test_data_names = [i[2] for i in test_data_for_dynet]
+        test_data_for_dynet = [(i[0], i[1]) for i in test_data_for_dynet]
+        train_meta_features = {sr_obj.name: sr_obj.explanatory_features for sr_obj in train_data}
+        test_meta_features = {sr_obj.name: sr_obj.explanatory_features for sr_obj in test_data}
+        # aligning the meta features not to include Nones
+        if self.use_meta_features:
+            train_meta_data, test_meta_data = self.data_prep_meta_features(train_meta_features=train_meta_features,
+                                                                           test_meta_features=test_meta_features)
+            meta_data_dim = len(list(train_meta_data[list(train_meta_data.keys())[0]]))
+        # Start DyNet and define trainer
+        model = dy.Model()
+        trainer = dy.AdamTrainer(model)
+
+        # Define the model
+        # Word embeddings part
+        if embedding_file is None:
+            W_emb = model.add_lookup_parameters((self.nwords, self.emb_size))
+        else:
+            external_embedding = self.build_embedding_matrix(embedding_file)
+            W_emb = model.add_lookup_parameters((self.nwords, self.emb_size), init=external_embedding)
+        first_lstm = dy.LSTMBuilder(1, self.emb_size, self.hid_size, model)    # Forward LSTM
+        if second_layer_as_lstm:
+            second_lstm = dy.LSTMBuilder(1, self.hid_size, self.hid_size, model)
+        else:
+            second_lstm = None
+        if self.use_meta_features:
+            W_sm = model.add_parameters((self.ntags, self.hid_size + meta_data_dim))  # Softmax weights
+        else:
+            W_sm = model.add_parameters((self.ntags, self.hid_size))  # Softmax weights
+        b_sm = model.add_parameters(self.ntags)                                         # Softmax bias
+        for ITER in range(self.epochs):
+            # Perform training
+            #random.seed(self.seed)
+            #random.shuffle(train_data_for_dynet)
+            train_loss = 0.0
+            start = time.time()
+            for idx, (sentences, tag) in enumerate(train_data_for_dynet):
+                my_loss =\
+                    dy.pickneglogsoftmax(self._calc_scores_two_layers(sentences=sentences, W_emb=W_emb,
+                                                                      first_lstm=first_lstm, second_lstm=second_lstm,
+                                                                      W_sm=W_sm, b_sm=b_sm,
+                                                                      meta_data=train_meta_data[train_data_names[idx]], #None,
+                                                                      normalize_results=True), tag)
+                train_loss += my_loss.value()
+                my_loss.backward()
+                trainer.update()
+            print("iter %r: train loss/sr=%.4f, time=%.2fs" % (ITER, train_loss / len(train_data_for_dynet),
+                                                               time.time() - start))
+            # Perform testing validation
+            test_correct = 0.0
+            for idx, (words, tag) in enumerate(test_data_for_dynet):
+                scores = self._calc_scores_two_layers(sentences=words, W_emb=W_emb, first_lstm=first_lstm,
+                                                      second_lstm=second_lstm, W_sm=W_sm, b_sm=b_sm,
+                                                      meta_data=test_meta_data[test_data_names[idx]], #None,
+                                                      normalize_results=True).npvalue()
+                predict = np.argmax(scores)
+                if predict == tag:
+                    test_correct += 1
+            print("iter %r: test acc=%.4f" % (ITER, test_correct / len(test_data_for_dynet)))
+        # Perform testing validation after all batches ended
+        all_scores = []
+        for idx, (words, tag) in enumerate(test_data_for_dynet):
+            cur_score = self._calc_scores_two_layers(sentences=words, W_emb=W_emb, first_lstm=first_lstm,
+                                                     second_lstm=second_lstm, W_sm=W_sm, b_sm=b_sm,
+                                                     meta_data=test_meta_data,#None
+                                                     normalize_results=True).npvalue()
+            all_scores.append(cur_score)
+        return all_scores
+
+'''
 if __name__ == "__main__":
     data_path = '/data/home/orentsur/data/reddit_place/' if sys.platform == 'linux' \
         else 'C:\\Users\\abrahami\\Documents\\Private\\Uni\\BGU\\PhD\\reddit canvas\\data\\'
@@ -286,10 +435,11 @@ if __name__ == "__main__":
                                                       tokenizer=reddit_tokenizer))
     data_names = [i[2] for i in data_for_dynet]
     data_for_dynet = [(i[0], i[1]) for i in data_for_dynet]
-    #dl_model_scores = dl_obj.fit_model(train=data_for_dynet, test=data_for_dynet)
+    #dl_model_scores = dl_obj.fit_single_layer_lstm(train=data_for_dynet, test=data_for_dynet)
     dl_model_scores = dl_obj.fit_two_layers_model(train=data_for_dynet, test=data_for_dynet)
     cur_eval_measures = dl_obj.evaluate_model(dl_model_scores=dl_model_scores,
                                               sr_objects=sr_objects)
     #print("Fold # {} has ended, here are the results of this fold:".format(cv_idx))
     print(cur_eval_measures)
-    #lstm_obj.fit_model(sr_objects=None, y_vector=None, train=train_data, dev=test_data)
+    #lstm_obj.fit_single_layer_lstm(sr_objects=None, y_vector=None, train=train_data, dev=test_data)
+'''

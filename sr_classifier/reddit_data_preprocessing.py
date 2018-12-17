@@ -16,6 +16,7 @@ import spacy
 
 nlp = spacy.load('en', disable=['parser', 'ner', 'tagger'])
 
+
 def create_reddit_tokenizer():
     """
     special case which we want to recognize:

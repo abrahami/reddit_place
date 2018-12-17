@@ -27,7 +27,7 @@ from r_place_drawing_classifier.utils import get_submissions_subset, get_comment
 from data_loaders.general_loader import sr_sample
 from sr_classifier.reddit_data_preprocessing import RedditDataPrep
 from sr_classifier.sub_reddit import SubReddit
-#from nn_classifier import NNClassifier
+from nn_classifier import NNClassifier
 from multiscorer import MultiScorer
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 from sklearn.model_selection import StratifiedKFold
@@ -42,7 +42,7 @@ comments_data_usage = {'meta_data': True, 'corpus': False}
 SEED = 1984
 build_sr_objects = False
 use_networks_meta_data = True
-classifier_type = 'BOW'  # should be 'DL' / 'BOW'
+classifier_type = 'DL'  # should be 'DL' / 'BOW'
 ########################################################################################################################
 
 
@@ -160,28 +160,23 @@ if __name__ == "__main__":
               "Total run time is: {}".format(len(sr_objects), duration))
     # case we do not build SR objects, but rather using existing pickle file holding these objects
     else:
-        #sr_objects = pickle.load(open(data_path + "sr_objects_102016_to_032017_sample.p", "rb"))
-        sr_objects = pickle.load(open(data_path + "sr_objects_6_months_balanced_5_12_2018.p", "rb"))
+        sr_objects = pickle.load(open(data_path + "sr_objects_102016_to_032017_sample.p", "rb"))
+        #sr_objects = pickle.load(open(data_path + "sr_objects_6_months_balanced_5_12_2018.p", "rb"))
         sr_objects = sr_objects
         # function to remove huge SRs, so parallalizem can be applied
         sr_objects = remove_huge_srs(sr_objects=sr_objects, quantile=0.05)
 
-        # adding meta features created by Alex for each SR network
-        if use_networks_meta_data:
-            not_found_sr = []
-            graph_meta_features = pickle.load(open(data_path + "graph_dict.pickle", "rb"))
-            for idx, cur_sr_obj in enumerate(sr_objects):
-                cur_sr_name = cur_sr_obj.name
-                try:
-                    cur_features = pd.Series(json_normalize(graph_meta_features[cur_sr_name]).iloc[0])
-                    cur_features = cur_features.to_dict()
-                    cur_features['is_biconnected'] = int(cur_features['is_biconnected'])
-                    cur_sr_obj.explanatory_features.update(cur_features)
-                # case the name doesn't exist in the dictionary
-                except KeyError:
-                    not_found_sr.append(cur_sr_name)
-                    continue
-            sr_objects = [sr for sr in sr_objects if sr.name not in set(not_found_sr)]
+        # adding meta features created by Alex for each SR network and data-prep to the meta-features
+        not_found_sr = []
+        for idx, cur_sr_obj in enumerate(sr_objects):
+            network_features = data_path + 'graph_dict_update_16_12.pickle' if use_networks_meta_data else None
+            res = cur_sr_obj.meta_features_handler(features_to_exclude=None, smooth_zero_features=True,
+                                                   network_features=network_features,
+                                                   features_to_include=set(sr_objects[1].explanatory_features))
+            # case there was a problem with the function, we will remove the sr from the data
+            if res != 0:
+                not_found_sr.append(cur_sr_obj.name)
+        sr_objects = [sr for sr in sr_objects if sr.name not in set(not_found_sr)]
         # creating the y vector feature and printing status
         y_data = []
         for idx, cur_sr_obj in enumerate(sr_objects):
@@ -236,27 +231,23 @@ if __name__ == "__main__":
             cv_obj = StratifiedKFold(n_splits=5, random_state=SEED)
             cv_obj.get_n_splits(sr_objects, y_data)
             for cv_idx, (train_index, test_index) in enumerate(cv_obj.split(sr_objects, y_data)):
+                print("Fold {} starts".format(cv_idx))
                 cur_train_sr_objects = [sr_objects[i] for i in train_index]
                 cur_test_sr_objects = [sr_objects[i] for i in test_index]
                 cur_y_train = [y_data[i] for i in train_index]
                 cur_y_test = [y_data[i] for i in test_index]
-                dl_obj = NNClassifier(model_type='lstm', emb_size=100, hid_size=100, epochs=20, use_bilstm=False,
-                                      seed=1984)
-                cur_train_data_for_dynet = list(dl_obj.get_reddit_sentences(sr_objects=cur_train_sr_objects,
-                                                                            maximum_sent_per_sr=100,
-                                                                            tokenizer=reddit_tokenizer))
-                cur_train_data_for_dynet = [(i[0], i[1]) for i in cur_train_data_for_dynet]
-                cur_test_data_for_dynet = list(dl_obj.get_reddit_sentences(sr_objects=cur_test_sr_objects,
-                                                                           maximum_sent_per_sr=100,
-                                                                           tokenizer=reddit_tokenizer))
+                dl_obj = NNClassifier(tokenizer=reddit_tokenizer, model_type='lstm', emb_size=300, hid_size=150,
+                                      epochs=10, use_bilstm=False, use_meta_features=True, model_sentences=False,
+                                      maximum_sent_per_sr=100, seed=1984)
 
-                cur_test_data_names = [i[2] for i in cur_test_data_for_dynet]
-                cur_test_data_for_dynet = [(i[0], i[1]) for i in cur_test_data_for_dynet]
-                dl_model_scores = dl_obj.fit_model(train=cur_train_data_for_dynet, test=cur_test_data_for_dynet)
-                cur_eval_measures = dl_obj.evaluate_model(dl_model_scores=dl_model_scores,
-                                                          sr_objects=cur_test_sr_objects)
-                print("Fold # {} has ended, here are the results of this fold:".format(cv_idx))
-                print(cur_eval_measures)
+                #dl_model_scores = \
+                #    dl_obj.fit_two_layers_lstm(train_data=cur_train_sr_objects, test_data=cur_test_sr_objects,
+                #                               embedding_file=data_path + 'embedding/' + 'glove.42B.300d.txt',
+                #                               second_layer_as_lstm=False)
+
+                dl_model_scores = dl_obj.fit_simple_mlp(train_data=cur_train_sr_objects, test_data=cur_test_sr_objects)
+
+                print("Fold # {} has ended".format(cv_idx))
                 '''
                 cur_test_sr_name_with_y = {sr_obj.name: sr_obj.trying_to_draw for sr_obj in cur_test_sr_objects}
                 cur_test_results_summary = [(sent_score[1], sr_name, cur_test_sr_name_with_y[sr_name])

@@ -268,7 +268,7 @@ def predict_model(pipeline, sr_objects, predict_proba=True):
     runs a prediction process over SR objects, using on a pipeline modeling process. It assumes the pipeline is already
     fitted
     :param pipeline: object
-         sklearn pipeline obejct, traind using the 'fit_model' function
+         sklearn pipeline obejct, traind using the 'fit_single_layer_lstm' function
     :param sr_objects: list
         list of SubReddit objects. These SRs should be used for training and are labeled as trying to draw or not
     :param predict_proba: bool, default = True
