@@ -16,7 +16,7 @@ from sr_classifier.reddit_data_preprocessing import RedditDataPrep
 from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_auc_score
 import collections
 import datetime
-from sklearn.preprocessing import Imputer
+from sklearn.preprocessing import Imputer, StandardScaler
 
 
 class NNClassifier(object):
@@ -100,16 +100,36 @@ class NNClassifier(object):
         self.ntags = len(self.t2i)
         return train, dev
 
-    def data_prep_meta_features(self, train_meta_features, test_meta_features):
+    def data_prep_meta_features(self, train_data, test_data, update_objects=True):
+        train_meta_features = {sr_obj.name: sr_obj.explanatory_features for sr_obj in train_data}
+        test_meta_features = {sr_obj.name: sr_obj.explanatory_features for sr_obj in test_data}
         imp_obj = Imputer(strategy='mean', copy=False)
+        normalize_obj = StandardScaler()
         train_as_df = pd.DataFrame.from_dict(train_meta_features, orient='index')
         test_as_df = pd.DataFrame.from_dict(test_meta_features, orient='index')
+        #imputation phase
         train_as_df = pd.DataFrame(imp_obj.fit_transform(train_as_df), columns=train_as_df.columns, index=train_as_df.index)
         test_as_df = pd.DataFrame(imp_obj.transform(test_as_df), columns=test_as_df.columns, index=test_as_df.index)
+
+        # normalization phase
+        train_as_df = pd.DataFrame(normalize_obj.fit_transform(train_as_df), columns=train_as_df.columns, index=train_as_df.index)
+        test_as_df = pd.DataFrame(normalize_obj.transform(test_as_df), columns=test_as_df.columns, index=test_as_df.index)
+
         train_meta_features_imputed = train_as_df.to_dict('index')
         test_meta_features_imputed = test_as_df.to_dict('index')
-        return {key: collections.defaultdict(None, value) for key, value in train_meta_features_imputed.items()}, \
-               {key: collections.defaultdict(None, value) for key, value in test_meta_features_imputed.items()},
+        updated_meta_features_dict_train = \
+            {key: collections.defaultdict(None, value) for key, value in train_meta_features_imputed.items()}
+        updated_meta_features_dict_test = \
+            {key: collections.defaultdict(None, value) for key, value in test_meta_features_imputed.items()}
+        if update_objects:
+            # looping over all srs object and updating the meta data features
+            for cur_sr in train_data:
+                cur_sr.explanatory_features = updated_meta_features_dict_train[cur_sr.name]
+            for cur_sr in test_data:
+                cur_sr.explanatory_features = updated_meta_features_dict_test[cur_sr.name]
+            return 0
+        else:
+            return updated_meta_features_dict_train, updated_meta_features_dict_test
 
     def build_embedding_matrix(self, embedding_file):
         start_time = datetime.datetime.now()
@@ -134,62 +154,67 @@ class NNClassifier(object):
               "compared to the embedding matrix.".format(duration, found_words * 100.0 / self.nwords))
         return embedding_matrix
 
-    def _predict_simple_mlp(self, pU, pb, pv, x):
-        U = dy.parameter(pU)
-        b = dy.parameter(pb)
-        v = dy.parameter(pv)
-        y = dy.logistic(dy.dot_product(v, dy.tanh(U * x + b)))
-        return y
-
     def fit_simple_mlp(self, train_data, test_data):
         random.seed(self.seed)
         random.shuffle(train_data)
-        train_meta_features = {sr_obj.name: sr_obj.explanatory_features for sr_obj in train_data}
-        test_meta_features = {sr_obj.name: sr_obj.explanatory_features for sr_obj in test_data}
-        train_meta_data, test_meta_data = self.data_prep_meta_features(train_meta_features=train_meta_features,
-                                                                       test_meta_features=test_meta_features)
+        self.data_prep_meta_features(train_data=train_data, test_data=test_data, update_objects=True)
+        train_meta_data = [sr_obj.explanatory_features for sr_obj in train_data]
+        test_meta_data = [sr_obj.explanatory_features for sr_obj in test_data]
         y_train = [sr_obj.trying_to_draw for sr_obj in train_data]
         y_test = [sr_obj.trying_to_draw for sr_obj in test_data]
-        meta_data_dim = len(list(train_meta_data[list(train_meta_data.keys())[0]]))
+        meta_data_dim = len(list(train_meta_data[0].keys()))
         # Start DyNet and define trainer
         model = dy.Model()
-        trainer = dy.AdamTrainer(model)
+        trainer = dy.SimpleSGDTrainer(model)
 
-        pU = model.add_parameters((meta_data_dim, self.ntags))
-        pb = model.add_parameters(meta_data_dim)
-        pv = model.add_parameters(meta_data_dim)
-        closs = 0.0
+        dy.renew_cg()
+        W = model.add_parameters((self.hid_size, meta_data_dim))
+        b = model.add_parameters(self.hid_size)
+        V = model.add_parameters((1, self.hid_size))
+        a = model.add_parameters(1)
+        x = dy.vecInput(meta_data_dim)
+        h = dy.tanh((W * x) + b)
+        y = dy.scalarInput(0)
+        y_pred = dy.logistic((V * h) + a)
+        loss = dy.binary_log_loss(y_pred, y)
+
         for ITER in range(self.epochs):
             # Perform training
-
-            train_loss = 0.0
+            mloss = 0.0
             start = time.time()
-            for idx, (cur_x, tag) in enumerate(zip(train_meta_data, y_train)):
+            for idx, (cur_sr_dict, tag) in enumerate(zip(train_meta_data, y_train)):
+                #dy.renew_cg()
                 # create graph for computing loss
-                dy.renew_cg()
-                y_hat = self._predict_simple_mlp(pU=pU, pb=pb, pv=pv, x=cur_x)
-                # loss
-                if tag == 0:
-                    loss = -dy.log(1 - y_hat)
-                elif tag == 1:
-                    loss = -dy.log(y_hat)
-
-                closs += loss.scalar_value()  # forward
+                cur_sr_values_ordered = [value for key, value in sorted(cur_sr_dict.items())]
+                x.set(cur_sr_values_ordered)
+                tag_normalized = 1 if tag == 1 else 0
+                y.set(tag_normalized)
+                # loss calc
+                mloss += loss.value()
                 loss.backward()
                 trainer.update()
-            print("iter %r: train loss/sent=%.4f, time=%.2fs" % (ITER, train_loss / len(y_train), time.time() - start))
+            print("iter %r: train loss/sr=%.4f, time=%.2fs" % (ITER, mloss / len(y_train), time.time() - start))
             # Perform testing validation
             test_correct = 0.0
-            for cur_x, tag in zip(test_data, y_test):
-                y_hat = self._predict_simple_mlp(pU=pU, pb=pb, pv=pv, x=cur_x)
-                if y_hat >= .5 and tag == 1 or y_hat <= .5 and tag == 0:
+            y_pred = dy.logistic((V * h) + a)
+            for idx, (cur_sr_dict, tag) in enumerate(zip(test_meta_data, y_test)):
+                cur_sr_values_ordered = [value for key, value in sorted(cur_sr_dict.items())]
+                x.set(cur_sr_values_ordered)
+                y_pred_value = y_pred.value()
+                if (y_pred_value >= .5 and tag == 1) or (y_pred_value <= .5 and tag == -1):
                     test_correct += 1
             print("iter %r: test acc=%.4f" % (ITER, test_correct / len(y_test)))
         # Perform testing validation after all batches ended
         all_scores = []
-        for cur_x, tag in zip(test_data, y_test):
-            y_hat = self._predict_simple_mlp(pU=pU, pb=pb, pv=pv, x=cur_x)
-            all_scores.append(y_hat)
+        test_correct = 0.0
+        for idx, (cur_sr_dict, tag) in enumerate(zip(test_meta_data, y_test)):
+            cur_sr_values_ordered = [value for key, value in sorted(cur_sr_dict.items())]
+            x.set(cur_sr_values_ordered)
+            y_pred_value = y_pred.value()
+            all_scores.append(y_pred_value)
+            if (y_pred_value >= .5 and tag == 1) or (y_pred_value <= .5 and tag == -1):
+                test_correct += 1
+        print("final test acc=%.4f" % (test_correct / len(y_test)))
         return all_scores
 
     # A function to calculate scores for one value
@@ -339,24 +364,28 @@ class NNClassifier(object):
                 return score_not_normalized
 
     def fit_two_layers_lstm(self, train_data, test_data, embedding_file=None, second_layer_as_lstm=True):
+
+        # case we wish to use meta features along modeling, we need to prepare the SRs objects for this
+        if self.use_meta_features:
+            train_meta_data, test_meta_data = \
+                self.data_prep_meta_features(train_data=train_data, test_data=test_data, update_objects=False)
+            meta_data_dim = len(train_meta_data[list(train_meta_data.keys())[0]])
+
+        # next we are creating the input for the algorithm. train_data_for_dynet will contain list of lists. Each inner
+        # list contains the words index relevant to the specific sentence
         train_data_for_dynet = list(self.get_reddit_sentences(sr_objects=train_data))
-        train_data_names = [i[2] for i in train_data_for_dynet]
+        train_data_names = [i[2] for i in train_data_for_dynet]  # list of train sr names
         train_data_for_dynet = [(i[0], i[1]) for i in train_data_for_dynet]
 
+        # test_data_for_dynet will contain list of lists. Each inner list contains the words index relevant to the
+        # specific sentence
         test_data_for_dynet = list(self.get_reddit_sentences(sr_objects=test_data))
-        test_data_names = [i[2] for i in test_data_for_dynet]
+        test_data_names = [i[2] for i in test_data_for_dynet] # list of test sr names
         test_data_for_dynet = [(i[0], i[1]) for i in test_data_for_dynet]
-        train_meta_features = {sr_obj.name: sr_obj.explanatory_features for sr_obj in train_data}
-        test_meta_features = {sr_obj.name: sr_obj.explanatory_features for sr_obj in test_data}
-        # aligning the meta features not to include Nones
-        if self.use_meta_features:
-            train_meta_data, test_meta_data = self.data_prep_meta_features(train_meta_features=train_meta_features,
-                                                                           test_meta_features=test_meta_features)
-            meta_data_dim = len(list(train_meta_data[list(train_meta_data.keys())[0]]))
+
         # Start DyNet and define trainer
         model = dy.Model()
         trainer = dy.AdamTrainer(model)
-
         # Define the model
         # Word embeddings part
         if embedding_file is None:

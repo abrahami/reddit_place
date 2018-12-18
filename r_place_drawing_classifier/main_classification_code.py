@@ -160,8 +160,8 @@ if __name__ == "__main__":
               "Total run time is: {}".format(len(sr_objects), duration))
     # case we do not build SR objects, but rather using existing pickle file holding these objects
     else:
-        sr_objects = pickle.load(open(data_path + "sr_objects_102016_to_032017_sample.p", "rb"))
-        #sr_objects = pickle.load(open(data_path + "sr_objects_6_months_balanced_5_12_2018.p", "rb"))
+        #sr_objects = pickle.load(open(data_path + "sr_objects_102016_to_032017_sample.p", "rb"))
+        sr_objects = pickle.load(open(data_path + "sr_objects_6_months_balanced_5_12_2018.p", "rb"))
         sr_objects = sr_objects
         # function to remove huge SRs, so parallalizem can be applied
         sr_objects = remove_huge_srs(sr_objects=sr_objects, quantile=0.05)
@@ -238,14 +238,14 @@ if __name__ == "__main__":
                 cur_y_test = [y_data[i] for i in test_index]
                 dl_obj = NNClassifier(tokenizer=reddit_tokenizer, model_type='lstm', emb_size=300, hid_size=150,
                                       epochs=10, use_bilstm=False, use_meta_features=True, model_sentences=False,
-                                      maximum_sent_per_sr=100, seed=1984)
+                                      maximum_sent_per_sr=10, seed=1984)
 
-                #dl_model_scores = \
-                #    dl_obj.fit_two_layers_lstm(train_data=cur_train_sr_objects, test_data=cur_test_sr_objects,
-                #                               embedding_file=data_path + 'embedding/' + 'glove.42B.300d.txt',
-                #                               second_layer_as_lstm=False)
+                dl_model_scores = \
+                    dl_obj.fit_two_layers_lstm(train_data=cur_train_sr_objects, test_data=cur_test_sr_objects,
+                                               embedding_file=data_path + 'embedding/' + 'glove.42B.300d.txt',
+                                               second_layer_as_lstm=False)
 
-                dl_model_scores = dl_obj.fit_simple_mlp(train_data=cur_train_sr_objects, test_data=cur_test_sr_objects)
+                #dl_model_scores = dl_obj.fit_simple_mlp(train_data=cur_train_sr_objects, test_data=cur_test_sr_objects)
 
                 print("Fold # {} has ended".format(cv_idx))
                 '''
