@@ -32,6 +32,7 @@ from multiscorer import MultiScorer
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 from sklearn.model_selection import StratifiedKFold
 from pandas.io.json import json_normalize
+import xgboost as xgb
 
 STOPLIST = set(stopwords.words('english') + list(ENGLISH_STOP_WORDS))
 
@@ -42,6 +43,9 @@ comments_data_usage = {'meta_data': True, 'corpus': False}
 SEED = 1984
 build_sr_objects = False
 use_networks_meta_data = True
+save_results = True
+model_authors_seq = True
+use_external_embedding = True
 classifier_type = 'DL'  # should be 'DL' / 'BOW'
 ########################################################################################################################
 
@@ -168,14 +172,34 @@ if __name__ == "__main__":
 
         # adding meta features created by Alex for each SR network and data-prep to the meta-features
         not_found_sr = []
+        if model_authors_seq:
+            with open(data_path + "sequence_dict.pkl", 'rb') as f:
+                conversations_seq = pickle.load(f)
+        else:
+            conversations_seq = None
+        network_features = data_path + 'graph_dict_update_16_12.pickle' if use_networks_meta_data else None
         for idx, cur_sr_obj in enumerate(sr_objects):
-            network_features = data_path + 'graph_dict_update_16_12.pickle' if use_networks_meta_data else None
+
             res = cur_sr_obj.meta_features_handler(features_to_exclude=None, smooth_zero_features=True,
                                                    network_features=network_features,
                                                    features_to_include=set(sr_objects[1].explanatory_features))
             # case there was a problem with the function, we will remove the sr from the data
             if res != 0:
                 not_found_sr.append(cur_sr_obj.name)
+            # case we want to model authors sequance instead of sequance of words in a submission
+            if model_authors_seq:
+                try:
+                    cur_sr_obj.replace_sentences_with_authors_seq(conversations=conversations_seq[cur_sr_obj.name])
+                # case the SR is not in the dict Alex created
+                except KeyError:
+                    not_found_sr.append(cur_sr_obj.name)
+        duration = (datetime.datetime.now() - start_time).seconds
+        print("Ended the process of adding network meta features and converting sentences into authors sequence "
+              "(if it was required). Due to this processes, {} SRs were removed. "
+              "Up to now we ran for {} sec.".format(len(not_found_sr), duration))
+        # deleting the terrible object :)
+        del conversations_seq
+        gc.collect()
         sr_objects = [sr for sr in sr_objects if sr.name not in set(not_found_sr)]
         # creating the y vector feature and printing status
         y_data = []
@@ -183,14 +207,6 @@ if __name__ == "__main__":
             y_data += [cur_sr_obj.trying_to_draw]
             # this was used in order to create random y vector, and see results really get totally random
             # y_data += [int(np.random.choice(a=[-1, 1], size=1))]
-            # fixing the 'days_pazam' feature if needed
-            #if type(cur_sr_obj.explanatory_features['days_pazam']) is datetime.timedelta:
-            #    cur_sr_obj.explanatory_features['days_pazam'] = cur_sr_obj.explanatory_features['days_pazam'].days
-            #cur_sr_obj.explanatory_features.pop('submission_amount_normalized')
-            #if cur_sr_obj.explanatory_features['days_pazam'] is None:
-            #    cur_sr_obj.explanatory_features['days_pazam'] = 0
-            #if cur_sr_obj.explanatory_features['submission_users_std'] is None:
-            #    cur_sr_obj.explanatory_features['submission_users_std'] = 0
         print("Target feature distribution is: {}".format(collections.Counter(y_data)))
         # Modeling (learning phase)
         submission_dp_obj = RedditDataPrep(is_submission_data=True, remove_stop_words=False, most_have_regex=None)
@@ -204,7 +220,10 @@ if __name__ == "__main__":
         if classifier_type == 'BOW':
             cv_res, pipeline, predictions =\
                 fit_model(sr_objects=sr_objects, y_vector=y_data, tokenizer=reddit_tokenizer, ngram_size=2,
-                          use_two_vectorizers=False, clf_model=GradientBoostingClassifier, stop_words=STOPLIST,
+                          use_two_vectorizers=False,
+                          clf_model=xgb.XGBClassifier,
+                          #clf_model=GradientBoostingClassifier,
+                          stop_words=STOPLIST,
                           vectorizers_general_params={'max_df': 0.8, 'min_df': 3, 'max_features': 300},
                           #clf_parmas={'hidden_layer_sizes': (100, 50, 10)})
                           clf_parmas={'random_state': SEED, 'max_depth': 3,  'n_estimators': 50})
@@ -228,38 +247,69 @@ if __name__ == "__main__":
                                                  pipeline.named_steps['union'].get_params()[
                                                      'numeric_meta_features'].get_params()['steps'][1][1]], clf=clf, N=20)
         elif classifier_type == 'DL':
+            '''
+            handling the embedding file (if we want to use an external one). This can be applied only in case we model
+            the actual words in each SR, since otherwise we use the authors names, and it doesn't make sense to use
+            pre defined embedding in such cases
+            '''
+            embedding_file = data_path + 'embedding/' + 'glove.42B.300d.txt' \
+                if use_external_embedding and not model_authors_seq else None
+            eval_measures_dict = {'accuracy': accuracy_score, 'precision': precision_score, 'recall': recall_score}
+            dl_obj = NNClassifier(tokenizer=reddit_tokenizer, eval_measures=eval_measures_dict,
+                                  model_type='lstm', emb_size=300, hid_size=150,
+                                  epochs=10, use_bilstm=False, use_meta_features=True, model_sentences=False,
+                                  maximum_sent_per_sr=10, seed=1984)
             cv_obj = StratifiedKFold(n_splits=5, random_state=SEED)
             cv_obj.get_n_splits(sr_objects, y_data)
+            all_test_data_pred = []
             for cv_idx, (train_index, test_index) in enumerate(cv_obj.split(sr_objects, y_data)):
                 print("Fold {} starts".format(cv_idx))
                 cur_train_sr_objects = [sr_objects[i] for i in train_index]
                 cur_test_sr_objects = [sr_objects[i] for i in test_index]
                 cur_y_train = [y_data[i] for i in train_index]
                 cur_y_test = [y_data[i] for i in test_index]
-                dl_obj = NNClassifier(tokenizer=reddit_tokenizer, model_type='lstm', emb_size=300, hid_size=150,
-                                      epochs=10, use_bilstm=False, use_meta_features=True, model_sentences=False,
-                                      maximum_sent_per_sr=10, seed=1984)
-
-                dl_model_scores = \
+                cur_results, cur_model, cur_test_predictions = \
                     dl_obj.fit_two_layers_lstm(train_data=cur_train_sr_objects, test_data=cur_test_sr_objects,
-                                               embedding_file=data_path + 'embedding/' + 'glove.42B.300d.txt',
-                                               second_layer_as_lstm=False)
+                                               embedding_file=embedding_file, second_layer_as_lstm=False)
 
-                #dl_model_scores = dl_obj.fit_simple_mlp(train_data=cur_train_sr_objects, test_data=cur_test_sr_objects)
+                #cur_results, cur_model, cur_test_predictions = \
+                #    dl_obj.fit_simple_mlp(train_data=cur_train_sr_objects, test_data=cur_test_sr_objects)
 
-                print("Fold # {} has ended".format(cv_idx))
-                '''
-                cur_test_sr_name_with_y = {sr_obj.name: sr_obj.trying_to_draw for sr_obj in cur_test_sr_objects}
-                cur_test_results_summary = [(sent_score[1], sr_name, cur_test_sr_name_with_y[sr_name])
-                                            for sent_score, sr_name, y in
-                                            zip(dl_model_scores, cur_test_data_names, cur_y_test)]
-                # converting it into pandas - much easier to work with
-                cur_test_res_df = pd.DataFrame(cur_test_results_summary,
-                                               columns=['prediction', 'sr_name', 'trying_to_draw'])
-                cur_test_res_agg = cur_test_res_df.groupby(['sr_name'], as_index=False).agg(
-                    {'prediction': ['mean', 'max', 'min'], 'trying_to_draw': 'mean'})
-                cur_test_res_agg.columns = ['sr_name', 'pred_mean', 'pred_max', 'pred_min', 'trying_to_draw']
-                print("wow")
-                '''
+                print("Fold # {} has ended, updated results list is: {}".format(cv_idx, cur_results))
+                cur_test_sr_names = [sr_obj.name for sr_obj in cur_test_sr_objects]
+                all_test_data_pred.extend([(y, pred, name) for name, y, pred in
+                                           zip(cur_test_sr_names, cur_y_test, cur_test_predictions)])
+
+            # saving results to file if needed
+            if save_results:
+                eval_results = dl_obj.eval_results
+                dl_params_tp_save = dl_obj.__dict__
+                dl_params_tp_save.pop('w2i')
+                dl_params_tp_save.pop('t2i')
+                dl_params_tp_save.pop('eval_results')
+                dl_params_tp_save.pop('eval_measures')
+                save_results_to_csv(start_time=start_time, SRs_amount=len(sr_objects),
+                                    models_params=dl_params_tp_save, results=eval_results, saving_path=os.getcwd())
+                print("Full modeling code has ended. Results are as follow: {}."
+                      "\nThe process started at {} and finished at {}".format(eval_results, start_time,
+                                                                              datetime.datetime.now()))
+
+                # Analysis phase, saving the required data to a csv file
+                res_summary_df = pd.DataFrame(all_test_data_pred, columns=['true_y', 'prediction_to_draw', 'sr_name'])
+                res_summary_df.to_csv(data_path + 'dl_results.csv', index=False)
+
+            '''
+            cur_test_sr_name_with_y = {sr_obj.name: sr_obj.trying_to_draw for sr_obj in cur_test_sr_objects}
+            cur_test_results_summary = [(sent_score[1], sr_name, cur_test_sr_name_with_y[sr_name])
+                                        for sent_score, sr_name, y in
+                                        zip(dl_model_scores, cur_test_data_names, cur_y_test)]
+            # converting it into pandas - much easier to work with
+            cur_test_res_df = pd.DataFrame(cur_test_results_summary,
+                                           columns=['prediction', 'sr_name', 'trying_to_draw'])
+            cur_test_res_agg = cur_test_res_df.groupby(['sr_name'], as_index=False).agg(
+                {'prediction': ['mean', 'max', 'min'], 'trying_to_draw': 'mean'})
+            cur_test_res_agg.columns = ['sr_name', 'pred_mean', 'pred_max', 'pred_min', 'trying_to_draw']
+            print("wow")
+            '''
 
 

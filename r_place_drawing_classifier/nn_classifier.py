@@ -23,13 +23,16 @@ class NNClassifier(object):
     """
     """
 
-    def __init__(self, tokenizer, model_type='lstm', emb_size=100, hid_size=100, epochs=10, use_bilstm=False,
-                 use_meta_features=True, model_sentences=False, maximum_sent_per_sr=10, seed=1984):
-        self.tokenizer=tokenizer
+    def __init__(self, tokenizer, eval_measures, model_type='lstm', emb_size=100, hid_size=100, early_stopping=True,
+                 epochs=10, use_bilstm=False, use_meta_features=True, model_sentences=False, maximum_sent_per_sr=10,
+                 seed=1984):
+        self.tokenizer = tokenizer
+        self.eval_measures = eval_measures
         self.model_type = model_type
         self.use_bilstm = use_bilstm
-        self.use_meta_features=use_meta_features
+        self.use_meta_features = use_meta_features
         self.epochs = epochs
+        self.early_stopping = early_stopping
         # Functions to read in the corpus
         self.w2i = defaultdict(lambda: len(self.w2i))
         self.t2i = defaultdict(lambda: len(self.t2i))
@@ -39,10 +42,10 @@ class NNClassifier(object):
         self.emb_size = emb_size
         self.hid_size = hid_size
         self.model_sentences = model_sentences
-        self.maximum_sent_per_sr=maximum_sent_per_sr
+        self.maximum_sent_per_sr = maximum_sent_per_sr
         self.seed = seed
         random.seed(self.seed)
-        self.eval_measures = dict()
+        self.eval_results = defaultdict(list)
 
     def get_reddit_sentences(self, sr_objects):
         # looping over all sr objects
@@ -154,6 +157,16 @@ class NNClassifier(object):
               "compared to the embedding matrix.".format(duration, found_words * 100.0 / self.nwords))
         return embedding_matrix
 
+    def calc_eval_measures(self, y_true, y_pred, nomalize_y=True):
+        if nomalize_y:
+            y_true = [1 if y > 0 else 0 for y in y_true]
+            binary_y_pred = [1 if p > 0.5 else 0 for p in y_pred]
+        else:
+            binary_y_pred = [1 if p > 0.5 else -1 for p in y_pred]
+        for name, func in self.eval_measures.items():
+            self.eval_results[name].append(func(y_true, binary_y_pred))
+        return self.eval_results
+
     def fit_simple_mlp(self, train_data, test_data):
         random.seed(self.seed)
         random.shuffle(train_data)
@@ -177,23 +190,29 @@ class NNClassifier(object):
         y = dy.scalarInput(0)
         y_pred = dy.logistic((V * h) + a)
         loss = dy.binary_log_loss(y_pred, y)
-
+        mloss = [0.0, 0.0]  # we always save the current run loss and the prev one (for early stopping purposes
         for ITER in range(self.epochs):
+            # checking the early stopping criterion
+            if self.early_stopping and (ITER > self.epochs * 1.0 / 2) and (mloss[0]-mloss[1]) * 1.0 / mloss[0] <= 0.01:
+                print("Early stopping has been applied since improvement was not greater than 1%")
+                break
             # Perform training
-            mloss = 0.0
             start = time.time()
+            cur_mloss=0.0
             for idx, (cur_sr_dict, tag) in enumerate(zip(train_meta_data, y_train)):
-                #dy.renew_cg()
                 # create graph for computing loss
                 cur_sr_values_ordered = [value for key, value in sorted(cur_sr_dict.items())]
                 x.set(cur_sr_values_ordered)
                 tag_normalized = 1 if tag == 1 else 0
                 y.set(tag_normalized)
                 # loss calc
-                mloss += loss.value()
+                cur_mloss += loss.value()
                 loss.backward()
                 trainer.update()
-            print("iter %r: train loss/sr=%.4f, time=%.2fs" % (ITER, mloss / len(y_train), time.time() - start))
+            # updating the mloss for early stopping purposes
+            mloss[0] = mloss[1]
+            mloss[1] = cur_mloss
+            print("iter %r: train loss/sr=%.4f, time=%.2fs" % (ITER, cur_mloss / len(y_train), time.time() - start))
             # Perform testing validation
             test_correct = 0.0
             y_pred = dy.logistic((V * h) + a)
@@ -205,17 +224,18 @@ class NNClassifier(object):
                     test_correct += 1
             print("iter %r: test acc=%.4f" % (ITER, test_correct / len(y_test)))
         # Perform testing validation after all batches ended
-        all_scores = []
+        test_predicitons = []
         test_correct = 0.0
         for idx, (cur_sr_dict, tag) in enumerate(zip(test_meta_data, y_test)):
             cur_sr_values_ordered = [value for key, value in sorted(cur_sr_dict.items())]
             x.set(cur_sr_values_ordered)
             y_pred_value = y_pred.value()
-            all_scores.append(y_pred_value)
+            test_predicitons.append(y_pred_value)
             if (y_pred_value >= .5 and tag == 1) or (y_pred_value <= .5 and tag == -1):
                 test_correct += 1
+        self.calc_eval_measures(y_true=y_test, y_pred=test_predicitons, nomalize_y=True)
         print("final test acc=%.4f" % (test_correct / len(y_test)))
-        return all_scores
+        return self.eval_results, model, test_predicitons
 
     # A function to calculate scores for one value
     def _calc_scores_single_layer_lstm(self, words, W_emb, fwdLSTM, bwdLSTM, W_sm, b_sm, normalize_results=True):
@@ -370,7 +390,10 @@ class NNClassifier(object):
             train_meta_data, test_meta_data = \
                 self.data_prep_meta_features(train_data=train_data, test_data=test_data, update_objects=False)
             meta_data_dim = len(train_meta_data[list(train_meta_data.keys())[0]])
-
+        else:
+            train_meta_data = None
+            test_meta_data = None
+            meta_data_dim = 0
         # next we are creating the input for the algorithm. train_data_for_dynet will contain list of lists. Each inner
         # list contains the words index relevant to the specific sentence
         train_data_for_dynet = list(self.get_reddit_sentences(sr_objects=train_data))
@@ -380,7 +403,8 @@ class NNClassifier(object):
         # test_data_for_dynet will contain list of lists. Each inner list contains the words index relevant to the
         # specific sentence
         test_data_for_dynet = list(self.get_reddit_sentences(sr_objects=test_data))
-        test_data_names = [i[2] for i in test_data_for_dynet] # list of test sr names
+        test_data_names = [i[2] for i in test_data_for_dynet]   # list of test sr names
+        ### Need to check here that the ordered is saved!!!!
         test_data_for_dynet = [(i[0], i[1]) for i in test_data_for_dynet]
 
         # Start DyNet and define trainer
@@ -398,11 +422,10 @@ class NNClassifier(object):
             second_lstm = dy.LSTMBuilder(1, self.hid_size, self.hid_size, model)
         else:
             second_lstm = None
-        if self.use_meta_features:
-            W_sm = model.add_parameters((self.ntags, self.hid_size + meta_data_dim))  # Softmax weights
-        else:
-            W_sm = model.add_parameters((self.ntags, self.hid_size))  # Softmax weights
-        b_sm = model.add_parameters(self.ntags)                                         # Softmax bias
+        # Last layer with softmax weights+bias, case we are not using meta data, meta_data_dim will be zero
+        # and hence not relevant
+        W_sm = model.add_parameters((self.ntags, self.hid_size + meta_data_dim))
+        b_sm = model.add_parameters(self.ntags)
         for ITER in range(self.epochs):
             # Perform training
             #random.seed(self.seed)
@@ -410,11 +433,12 @@ class NNClassifier(object):
             train_loss = 0.0
             start = time.time()
             for idx, (sentences, tag) in enumerate(train_data_for_dynet):
+                cur_meta_data = train_meta_data[train_data_names[idx]] if self.use_meta_features else None
                 my_loss =\
                     dy.pickneglogsoftmax(self._calc_scores_two_layers(sentences=sentences, W_emb=W_emb,
                                                                       first_lstm=first_lstm, second_lstm=second_lstm,
                                                                       W_sm=W_sm, b_sm=b_sm,
-                                                                      meta_data=train_meta_data[train_data_names[idx]], #None,
+                                                                      meta_data=cur_meta_data,
                                                                       normalize_results=True), tag)
                 train_loss += my_loss.value()
                 my_loss.backward()
@@ -424,23 +448,35 @@ class NNClassifier(object):
             # Perform testing validation
             test_correct = 0.0
             for idx, (words, tag) in enumerate(test_data_for_dynet):
+                cur_meta_data = test_meta_data[test_data_names[idx]] if self.use_meta_features else None
                 scores = self._calc_scores_two_layers(sentences=words, W_emb=W_emb, first_lstm=first_lstm,
                                                       second_lstm=second_lstm, W_sm=W_sm, b_sm=b_sm,
-                                                      meta_data=test_meta_data[test_data_names[idx]], #None,
+                                                      meta_data=cur_meta_data,
                                                       normalize_results=True).npvalue()
                 predict = np.argmax(scores)
                 if predict == tag:
                     test_correct += 1
             print("iter %r: test acc=%.4f" % (ITER, test_correct / len(test_data_for_dynet)))
         # Perform testing validation after all batches ended
-        all_scores = []
+        test_correct = 0.0
+        test_predicitons = []
         for idx, (words, tag) in enumerate(test_data_for_dynet):
+            cur_meta_data = test_meta_data[test_data_names[idx]] if self.use_meta_features else None
             cur_score = self._calc_scores_two_layers(sentences=words, W_emb=W_emb, first_lstm=first_lstm,
                                                      second_lstm=second_lstm, W_sm=W_sm, b_sm=b_sm,
-                                                     meta_data=test_meta_data,#None
+                                                     meta_data=cur_meta_data,
                                                      normalize_results=True).npvalue()
-            all_scores.append(cur_score)
-        return all_scores
+            # adding the prediction of the sr to draw (to be label 1) and calculating the acc on the fly
+            test_predicitons.append(cur_score[1])
+            predict = np.argmax(cur_score)
+            if predict == tag:
+                test_correct += 1
+
+        y_test = [a[1] for a in test_data_for_dynet]
+        self.calc_eval_measures(y_true=y_test, y_pred=test_predicitons, nomalize_y=True)
+        print("final test acc=%.4f" % (test_correct / len(y_test)))
+
+        return self.eval_results, model, test_predicitons
 
 '''
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ from clean_text_transformer import CleanTextTransformer
 import datetime
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+from xgboost import XGBClassifier
 from sklearn.model_selection import StratifiedKFold, cross_val_score, cross_validate, cross_val_predict
 from sklearn.pipeline import Pipeline, FeatureUnion
 from sklearn.feature_extraction import DictVectorizer
@@ -48,7 +49,7 @@ def print_n_most_informative(vectorizer, clf, N=10):
         print("Class 2 best n-grams (this is the 1 class - DRAWING SRs): ")
         for feat in top_class2:
             print(feat)
-    elif type(clf) == GradientBoostingClassifier or type(clf) == RandomForestClassifier:
+    elif type(clf) == GradientBoostingClassifier or type(clf) == RandomForestClassifier or type(clf) == XGBClassifier:
         importance_with_fns = sorted(zip(clf.feature_importances_, feature_names), reverse=True)
         top_model_importance = importance_with_fns[0:N]
         print("The {} most important features accoridng to the ensamble model are: ".format(N))

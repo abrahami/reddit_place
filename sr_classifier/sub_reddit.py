@@ -324,4 +324,23 @@ class SubReddit(object):
                     self.explanatory_features[key] = np.finfo(np.float).eps
         return 0
 
+    def replace_sentences_with_authors_seq(self, conversations):
+        # looping over all conversations (it is a dictionary)
+        all_convs_list = []
+        # looping over all conversations (it is a dictionary of conversations)
+        for conv_id, conv in conversations.items():
+            cur_conv_users = []
+            cur_conv_grade = conv[0]['score']
+            # looping over responses in the specific conversation (it is a list, should be ordered according to time)
+            for cur_resp in conv:
+                cur_conv_users.append(cur_resp['author'])
+            # updating the current convesation list with the new tupple (first element - score of the original
+            # submission, second place is the 'sentence' (which is the sequance of users submistted), 3rd place
+            # is '' since no 'selftext' in such case - we want to stick with the original format
+            try:
+                all_convs_list.append((cur_conv_grade, ' '.join(word for word in cur_conv_users), ''))
+            # case one of the authors is marked as np.nan, we'll just remove it. Maybe worth adding a warning here...
+            except TypeError:
+                all_convs_list.append((cur_conv_grade, ' '.join(word for word in cur_conv_users if type(word) is str), ''))
+        self.submissions_as_list = all_convs_list
 

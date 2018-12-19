@@ -148,11 +148,14 @@ def save_results_to_csv(start_time, SRs_amount, models_params, results, saving_p
         # only in case the file doesn't exist, we'll add a header
         if not file_exists:
             dict_writer.writeheader()
+        try:
+            host_name = os.environ['HOSTNAME'] if sys.platform == 'linux' else os.environ['COMPUTERNAME']
+        except KeyError:
+            host_name = 'pycharm with this ssh: '+ os.environ['SSH_CONNECTION']
         dict_writer.writerow({'timestamp': datetime.datetime.now(), 'start_time': start_time, 'SRs_amount': SRs_amount,
-                              'machine':  os.environ['HOSTNAME'] if sys.platform == 'linux' else os.environ['COMPUTERNAME'],
-                              'cv_folds': len(results['accuracy']), 'models_params': models_params,
-                              'accuracy': results['accuracy'], 'precision': results['precision'],
-                              'recall': results['recall']})
+                              'machine': host_name, 'cv_folds': len(results['accuracy']),
+                              'models_params': models_params, 'accuracy': results['accuracy'],
+                              'precision': results['precision'], 'recall': results['recall']})
     rf.close()
 
 
