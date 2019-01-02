@@ -175,6 +175,7 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
             ('clf', clf),
         ])
     else:
+
         vectorizer = TfidfVectorizer(tokenizer=tokenizer, ngram_range=(1, ngram_size), stop_words=stop_words,
                                      **vectorizers_general_params)
         dict_vectorizer = DictVectorizer()
@@ -182,7 +183,9 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
             clf = clf_model()
         else:
             clf = clf_model(**clf_parmas)
+
         # pipeline creation, with feature union
+        '''
         pipeline = Pipeline([
             # Use FeatureUnion to combine the features from pure text and meta data
             ('union', FeatureUnion(
@@ -212,7 +215,7 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
             ('clf', clf),
         ])
         '''
-        # special pipline in case we wish to run the model only with the meta-features
+        # special pipeline in case we wish to run the model only with the meta-features
         pipeline = Pipeline([
             # Use FeatureUnion to combine the features from pure text and meta data
             ('union', FeatureUnion(
@@ -233,7 +236,8 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
             # Use the defined classifier on the combined features
             ('clf', clf),
         ])
-        '''
+
+
 
     # k-fold CV using stratified strategy
     cv_obj = StratifiedKFold(n_splits=5, random_state=SEED)
@@ -242,10 +246,10 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
     scoring = {'acc': 'accuracy',
                'precision': 'precision',
                'recall': 'recall'}
-    cv_results = cross_validate(estimator=pipeline, X=sr_objects, y=y_vector, n_jobs=cv_obj.n_splits,
+    cv_results = cross_validate(estimator=pipeline, X=sr_objects, y=y_vector, #n_jobs=cv_obj.n_splits,
                                 scoring=scoring, cv=cv_obj, return_train_score=False, verbose=100)
     cross_val_predictions = cross_val_predict(estimator=pipeline, X=sr_objects, y=y_vector,
-                                              cv=cv_obj, method='predict_proba', n_jobs=cv_obj.n_splits)
+                                              cv=cv_obj, method='predict_proba')#, n_jobs=cv_obj.n_splits)
     '''
     scorer = MultiScorer({
         'accuracy': (accuracy_score, {}),

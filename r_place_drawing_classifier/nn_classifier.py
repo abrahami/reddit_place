@@ -24,7 +24,7 @@ class NNClassifier(object):
     """
 
     def __init__(self, tokenizer, eval_measures, model_type='lstm', emb_size=100, hid_size=100, early_stopping=True,
-                 epochs=10, use_bilstm=False, use_meta_features=True, model_sentences=False, maximum_sent_per_sr=10,
+                 epochs=10, use_bilstm=False, use_meta_features=True, model_sentences=False, maximum_sent_per_sr=None,
                  seed=1984):
         self.tokenizer = tokenizer
         self.eval_measures = eval_measures
@@ -52,15 +52,36 @@ class NNClassifier(object):
         for cur_sr in sr_objects:
             # pulling out the tag of the current sr
             tag = cur_sr.trying_to_draw
+            cur_sr_sentences = []
             if self.maximum_sent_per_sr is not None:
+                # sorting the list of submissions according to the score - we'll take the top X out of each SR
                 cur_sr.submissions_as_list.sort(key=lambda tup: tup[0], reverse=True)
-                cur_sr_sentences = [i[1] for idx, i in enumerate(cur_sr.submissions_as_list) if
-                                             idx < self.maximum_sent_per_sr and type(i[1]) is str]
-                #cur_sr_sentences = reversed([i[1] for idx, i in enumerate(reversed(cur_sr.submissions_as_list)) if
-                #                             idx < maximum_sent_per_sr and type(i[1]) is str])
+                # building the list of sentences, looping over the object and pulling the sentences themselves
+                for idx, i in enumerate(cur_sr.submissions_as_list):
+                    # stopping criteria
+                    if idx > self.maximum_sent_per_sr:
+                        break
+                    # case both (submission header + body are string)
+                    if type(i[1]) is str and type(i[2]) is str:
+                        cur_sr_sentences.append(i[1] + ' ' + i[2])
+                        continue
+                    # case only the submissions header is a string
+                    elif type(i[1]) is str:
+                        cur_sr_sentences.append(i[1])
+                        continue
             else:
-                cur_sr_sentences = [i[1] for i in cur_sr.submissions_as_list if type(i[1]) is str]
+                for idx, i in enumerate(cur_sr.submissions_as_list):
+                    # case both (submission header + body are string)
+                    if type(i[1]) is str and type(i[2]) is str:
+                        cur_sr_sentences.append(i[1] + ' ' + i[2])
+                        continue
+                    # case only the submissions header is a string
+                    elif type(i[1]) is str:
+                        cur_sr_sentences.append(i[1])
+                        continue
 
+            # before we tokenize the data, we remove the links and replace them with <link>
+            cur_sr_sentences = [RedditDataPrep.mark_urls(sen, marking_method='tag')[0] for sen in cur_sr_sentences]
             if self.model_sentences:
                 for sen in cur_sr_sentences:
                     sen_tokenized = self.tokenizer(sen)
@@ -193,7 +214,8 @@ class NNClassifier(object):
         mloss = [0.0, 0.0]  # we always save the current run loss and the prev one (for early stopping purposes
         for ITER in range(self.epochs):
             # checking the early stopping criterion
-            if self.early_stopping and (ITER > self.epochs * 1.0 / 2) and (mloss[0]-mloss[1]) * 1.0 / mloss[0] <= 0.01:
+            if self.early_stopping and (ITER >= (self.epochs * 1.0 / 2)) \
+                    and ((mloss[0]-mloss[1]) * 1.0 / mloss[0]) <= 0.01:
                 print("Early stopping has been applied since improvement was not greater than 1%")
                 break
             # Perform training
@@ -368,7 +390,8 @@ class NNClassifier(object):
                 return dy.softmax(score_not_normalized)
             else:
                 return score_not_normalized
-        # case we want to claculate the average of all the tensors instead of building another layer
+        # case we want to calculate the average of all the tensors instead of building another layer
+        # if wanted to take the maximum, one can use dy.emax instead of dy.average (but it is not too recommended)
         else:
             first_layer_avg = dy.average(last_comp_in_first_layer)
             if meta_data is None:
@@ -404,7 +427,7 @@ class NNClassifier(object):
         # specific sentence
         test_data_for_dynet = list(self.get_reddit_sentences(sr_objects=test_data))
         test_data_names = [i[2] for i in test_data_for_dynet]   # list of test sr names
-        ### Need to check here that the ordered is saved!!!!
+        ### Need to check here that the order is saved!!!!
         test_data_for_dynet = [(i[0], i[1]) for i in test_data_for_dynet]
 
         # Start DyNet and define trainer
@@ -422,16 +445,24 @@ class NNClassifier(object):
             second_lstm = dy.LSTMBuilder(1, self.hid_size, self.hid_size, model)
         else:
             second_lstm = None
+
+
         # Last layer with softmax weights+bias, case we are not using meta data, meta_data_dim will be zero
         # and hence not relevant
         W_sm = model.add_parameters((self.ntags, self.hid_size + meta_data_dim))
         b_sm = model.add_parameters(self.ntags)
+        mloss = [0.0, 0.0]  # we always save the current run loss and the prev one (for early stopping purposes
         for ITER in range(self.epochs):
+            # checking the early stopping criterion
+            if self.early_stopping and (ITER >= (self.epochs * 1.0 / 2)) \
+                    and ((mloss[0]-mloss[1]) * 1.0 / mloss[0]) <= 0.01:
+                print("Early stopping has been applied since improvement was not greater than 1%")
+                break
             # Perform training
             #random.seed(self.seed)
             #random.shuffle(train_data_for_dynet)
-            train_loss = 0.0
             start = time.time()
+            cur_mloss = 0.0
             for idx, (sentences, tag) in enumerate(train_data_for_dynet):
                 cur_meta_data = train_meta_data[train_data_names[idx]] if self.use_meta_features else None
                 my_loss =\
@@ -440,10 +471,13 @@ class NNClassifier(object):
                                                                       W_sm=W_sm, b_sm=b_sm,
                                                                       meta_data=cur_meta_data,
                                                                       normalize_results=True), tag)
-                train_loss += my_loss.value()
+                cur_mloss += my_loss.value()
                 my_loss.backward()
                 trainer.update()
-            print("iter %r: train loss/sr=%.4f, time=%.2fs" % (ITER, train_loss / len(train_data_for_dynet),
+            # updating the mloss for early stopping purposes
+            mloss[0] = mloss[1]
+            mloss[1] = cur_mloss
+            print("iter %r: train loss/sr=%.4f, time=%.2fs" % (ITER, cur_mloss / len(train_data_for_dynet),
                                                                time.time() - start))
             # Perform testing validation
             test_correct = 0.0

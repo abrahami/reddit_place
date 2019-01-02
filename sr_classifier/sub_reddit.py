@@ -8,6 +8,8 @@ from collections import defaultdict, Counter
 import datetime
 from dateutil import parser
 import pickle
+import random
+import math
 from pandas.io.json import json_normalize
 
 
@@ -78,27 +80,11 @@ class SubReddit(object):
             long string of all the text, seperated with a '.' between each
         """
         concatenated_text = '.'.join([str(l[1]) + '. ' + str(l[2]) + '.'
-                                       if type(l[2]) is str else str(l[1]) + '. ' for l in self.submissions_as_list ])
+                                       if type(l[2]) is str else str(l[1]) + '. ' for l in self.submissions_as_list])
         # handling the comments data, if it exists
         if self.comments_as_list is not None:
             # comments have no 'header' so it is only the self-text
             concatenated_text = concatenated_text + '.'.join([str(l[1]) + '. ' for l in self.comments_as_list])
-        '''
-        concatenated_text = ''
-        for t in self.submissions_as_list:
-            if type(t[1]) is str and type(t[2]) is str:
-                concatenated_text = concatenated_text + t[1] + '. ' + t[2] + '.'
-            elif type(t[1]) is str and type(t[2]) is float:
-                concatenated_text = concatenated_text + t[1] + '. '
-            elif type(t[2]) is str and type(t[1]) is float:
-                concatenated_text = concatenated_text + t[2] + '. '
-            else:
-                raise IOError("Problem along the 'concat_and_weight_text' function - input is illegal")
-        if self.comments_as_list is not None:
-            # comments have no 'header' so it is only the self-text
-            for t in self.comments_as_list:
-                concatenated_text = concatenated_text + t[1] + '. '  # + t[2] + '.'
-        '''
         return concatenated_text
 
     def create_explanatory_features(self, submission_data, comments_data=None):
@@ -287,6 +273,10 @@ class SubReddit(object):
             names of features which need to be removed from the meta-featurs list. Such features are ones we don't
             want to be used along modeling due to different reasons.
             If None - all features are included
+        :param features_to_include: list/set/dict (of strings). Default: None
+            names of features which need to be added to meta-featurs list. Such features will be filled with Nones.
+            This is useful only in cases some of the SRs we have, are missing some meta-features in their object
+            set of features (in later phases, these Nones will be filled in my average/median etc...)
         :param smooth_zero_features: bool. Default: True
             converting zero value features to the smallest value (positive) we can. This is useful in case we
             run DL models, and the gradient cannot converge with zero divided by zero cases
@@ -344,3 +334,42 @@ class SubReddit(object):
                 all_convs_list.append((cur_conv_grade, ' '.join(word for word in cur_conv_users if type(word) is str), ''))
         self.submissions_as_list = all_convs_list
 
+    def subsample_submissions_data(self, subsample_logic='score', percentage=0.2, maximum_submissions=5000, seed=1984):
+        """
+        subsample the submission data of the SR and replaces the list of submissions with the subsample. Logic how to
+        do the sub sample is one out of 3 options ('random', 'date', 'score')
+        :param subsample_logic: string. Default: 'score'
+            the method/logic how to do the sub sampling:'score' means that the top posts based their score will be taken
+            'date' means that the latest posts will be taken, 'random' means that random submissions will be taken
+        :param percentage: float. Default: 0.2
+            the % of submissions to sub sample from the SR. Must be a number > 0 and < 1
+        :param maximum_submissions: int. Default: 5000
+            maximum number of submissions to sub sample. If the % required to be taken based on 'percentage' input
+            yields a larger number than 'maximum_submissions' - than we will sub sample 'maximum_submissions'
+        :param seed: int. Default: 1984
+            the seed to be used when using 'random' option for sub sampling. Other wise it is not used
+        :return: -
+            updates the object on the fly (updates the submission_as_list
+        """
+
+        # case we want to take the top X% of submissions with the higest score, we'll sort the data according to the it
+        if subsample_logic == 'score':
+            self.submissions_as_list.sort(key=lambda tup: tup[0], reverse=True)
+        # case we want to take the top X% of submissions latest date, we'll reverse the original list (it is ordered, by
+        # the other way round than what is needed)
+        elif subsample_logic == 'date':
+            self.submissions_as_list = list(reversed(self.submissions_as_list))
+        # case we want to randomly choose the submissions, we'll mix all of them and then choose the top X%
+        elif subsample_logic == 'random':
+            random.seed(seed)
+            random.shuffle(self.submissions_as_list)
+
+        # setting the number of submissions to take accrding to the values given as input
+        try:
+            sub_to_take = math.ceil(len(self.submissions_as_list) * 1.0 * percentage)
+        # case there are no submissions at all
+        except TypeError:
+            return 0
+        sub_to_take = sub_to_take if sub_to_take < maximum_submissions else maximum_submissions
+        self.submissions_as_list = self.submissions_as_list[0:sub_to_take]
+        return 0

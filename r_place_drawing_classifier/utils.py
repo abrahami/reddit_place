@@ -138,7 +138,7 @@ def save_results_to_csv(start_time, SRs_amount, models_params, results, saving_p
         Nothing is returned, only saving to the file is being done
     '''
     results_file = saving_path + '/' if sys.platform == 'linux' else saving_path + '\\'
-    results_file += 'place_drawing_classifier_results.csv'
+    results_file += 'place_drawing_classifier_results_submission_based_sampling.csv'
     file_exists = os.path.isfile(results_file)
     rf = open(results_file, 'a', newline='')
     with rf as output_file:
@@ -208,3 +208,4 @@ def remove_huge_srs(sr_objects, quantile=0.01):
     print("remove_huge_srs function has ended, {} srs have been removed,"
           " {} out of them are from class 1 (drawing)".format(len(srs_to_remove), drawing_removed_srs))
     return returned_list
+

@@ -122,17 +122,18 @@ class RedditDataPrep(object):
                 self_text = row.loc['selftext']
                 # case the self text is not empty and was not removed
                 if self_text != '[removed]' and self_text != '[deleted]':
-                    full_text += [(row.loc['score'], row.loc['title'], self_text)]
+                    full_text += [(row.loc['score'], row.loc['title'], self_text, row.loc['id'], row.loc['created_utc_as_date'])]
                     continue
                 # case the content was removed but we want to include it in the data we generate
                 if (self_text == '[removed]' or self_text == '[deleted]') and self.include_deleted:
-                    full_text += [(row.loc['score'], row.loc['title'], '')]
+                    full_text += [(row.loc['score'], row.loc['title'], '', row.loc['id'], row.loc['created_utc_as_date'])]
         elif ~self.is_submission_data:
             for index, row in reddit_df.iterrows():
                 body = row.loc['body']
-                # case the self text is not empty and was not removed
+                # case the self text is not empty and was not removed. Need to make sure here that comment really
+                # has 'id' and that the info we save is enough (should we save also the submission id?)
                 if body != '[deleted]' and body != '[removed]':
-                    full_text += [(row.loc['score'], body, '')]
+                    full_text += [(row.loc['score'], body, '', row.loc['id'], row.loc['created_utc_as_date'])]
         legit_idx = set(reddit_df.index) - set(non_legit_idx)
         return reddit_df[reddit_df.index.isin(legit_idx)], full_text
 
@@ -235,8 +236,9 @@ class RedditDataPrep(object):
         :param text: str
             the text string to mark
         :param marking_method: str
-            either 'replace' or 'add'. 'replace' removes the url found and replaces it with the 'netloc' definition
-            (by the urlparse). 'add' will add a '<link>' before the like found and a '</link>' right after
+            either 'replace', 'add' or 'tag'. 'replace' removes the url found and replaces it with the
+            'netloc' definition (by the urlparse). 'add' will add a '<link>' before the like found and a '</link>'
+            right after. 'tag' will replace the whole url withe the token '<link>'
         :return: tuple
             first item in the tuple is the revised_text - which is the original text with the url markers
             second item in the tuple is the urls_found, which is a dict with counters for each 'netloc' key in the text
@@ -264,6 +266,11 @@ class RedditDataPrep(object):
                 revised_text += '<link>'
                 revised_text += text[starting_position:ending_position]
                 revised_text += '</link>'
+                loc_in_orig_str = ending_position
+            # case we want to add a <link> instead of the whole url
+            elif marking_method == 'tag':
+                revised_text += text[loc_in_orig_str:starting_position]
+                revised_text += '<link>'
                 loc_in_orig_str = ending_position
             # case it is none of the above, no change will be made
             else:

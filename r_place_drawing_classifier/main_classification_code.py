@@ -24,7 +24,7 @@ from sklearn.feature_extraction.stop_words import ENGLISH_STOP_WORDS
 from sr_classifier.utils import fit_model, print_n_most_informative
 from r_place_drawing_classifier.utils import get_submissions_subset, get_comments_subset, \
     save_results_to_csv, examine_word, remove_huge_srs
-from data_loaders.general_loader import sr_sample
+from data_loaders.general_loader import sr_sample_based_subscribers, sr_sample_based_submissions
 from sr_classifier.reddit_data_preprocessing import RedditDataPrep
 from sr_classifier.sub_reddit import SubReddit
 from nn_classifier import NNClassifier
@@ -32,7 +32,7 @@ from multiscorer import MultiScorer
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 from sklearn.model_selection import StratifiedKFold
 from pandas.io.json import json_normalize
-import xgboost as xgb
+#import xgboost as xgb
 
 STOPLIST = set(stopwords.words('english') + list(ENGLISH_STOP_WORDS))
 
@@ -43,10 +43,13 @@ comments_data_usage = {'meta_data': True, 'corpus': False}
 SEED = 1984
 build_sr_objects = False
 use_networks_meta_data = True
-save_results = True
-model_authors_seq = True
+save_results = False
+model_authors_seq = False
 use_external_embedding = True
-classifier_type = 'DL'  # should be 'DL' / 'BOW'
+remove_biggest_srs = False
+subsmaple_submissions = True
+classifier_type = 'BOW'  # should be 'DL' / 'BOW'
+batch_number = 19
 ########################################################################################################################
 
 
@@ -123,9 +126,15 @@ if __name__ == "__main__":
     start_time = datetime.datetime.now()
     if build_sr_objects:
         # first step will be to sample the data, then we will represent the result as a dictionary here
-        srs_mapping = sr_sample(data_path=data_path, sample_size='1:1', threshold_to_define_as_drawing=0.7,
-                                balanced_sampling_based_sr_size=True, internal_sr_metadata=True,
-                                sr_statistics_usage=True)
+        '''
+        srs_mapping = sr_sample_based_subscribers(data_path=data_path, sample_size='1:1',
+                                                  threshold_to_define_as_drawing=0.7,
+                                                  balanced_sampling_based_sr_size=True, internal_sr_metadata=True,
+                                                  sr_statistics_usage=True)
+        '''
+        # sampling SRs based on number of submissions
+        srs_mapping = sr_sample_based_submissions(data_path=data_path, sample_size='1.1:1', start_peoriod='2017-01',
+                                                  end_period='2017-03', threshold_to_define_as_drawing=0.7)
         srs_mapping = {sr[0]: (sr[1], sr[2], sr[3]) for sr in srs_mapping}
         print("We are going to handle {} srs. This is the drawing/not-drawing "
               "distribution: {}".format(len(srs_mapping),
@@ -135,12 +144,12 @@ if __name__ == "__main__":
         # sorting the list of names, so we can transfer it to couple of slaves on the cluster without worrying about the
         # order of them
         srs_names.sort()
-        srs_names = srs_names[1000:1500]
+        srs_names = srs_names[(400+batch_number*100):(400+(batch_number+2)*100)]
         # pulling the submission data, based on the subset of SRs we decided on
         # Data prep - train
         submission_dp_obj = RedditDataPrep(is_submission_data=True, remove_stop_words=False, most_have_regex=None)
         comments_dp_obj = RedditDataPrep(is_submission_data=False, remove_stop_words=False, most_have_regex=None)
-        processes_amount = 10
+        processes_amount = 1
         chunk_size = int(len(srs_names) * 1.0 / processes_amount)
         srs_names_in_chunks = [srs_names[i * chunk_size: i * chunk_size + chunk_size] for i in
                                range(processes_amount - 1)]
@@ -157,7 +166,7 @@ if __name__ == "__main__":
         idx = np.random.RandomState(seed=SEED).permutation(len(sr_objects))
         sr_objects = [sr_objects[i] for i in idx]
         # saving the data up to now into a pickle file
-        pickle.dump(sr_objects, open(data_path + "sr_objects_102016_to_032017_balanced_batch2.p", "wb"))
+        pickle.dump(sr_objects, open(data_path + "sr_objects_102016_to_032017_sampling_based_submission_batch_"+str(batch_number)+".p", "wb"))
 
         duration = (datetime.datetime.now() - start_time).seconds
         print("\nData shape after all cleaning is as follow: {} SRs are going to be used for training,"
@@ -165,42 +174,54 @@ if __name__ == "__main__":
     # case we do not build SR objects, but rather using existing pickle file holding these objects
     else:
         #sr_objects = pickle.load(open(data_path + "sr_objects_102016_to_032017_sample.p", "rb"))
-        sr_objects = pickle.load(open(data_path + "sr_objects_6_months_balanced_5_12_2018.p", "rb"))
+        #sr_objects = pickle.load(open(data_path + "sr_objects_6_months_sampling_based_subscibers_5_12_2018.p", "rb"))
+        sr_objects = pickle.load(open(data_path + "sr_objects_6_months_sampling_based_submission_30_12_2018.p", "rb"))
         sr_objects = sr_objects
-        # function to remove huge SRs, so parallalizem can be applied
-        sr_objects = remove_huge_srs(sr_objects=sr_objects, quantile=0.05)
+        # function to remove huge SRs, so parallelism can be applied
+        if remove_biggest_srs:
+            sr_objects = remove_huge_srs(sr_objects=sr_objects, quantile=0.2)
 
         # adding meta features created by Alex for each SR network and data-prep to the meta-features
-        not_found_sr = []
+        missing_srs_due_to_meta_features = []
+        missing_srs_due_to_authors_seq = []
         if model_authors_seq:
             with open(data_path + "sequence_dict.pkl", 'rb') as f:
                 conversations_seq = pickle.load(f)
         else:
             conversations_seq = None
-        network_features = data_path + 'graph_dict_update_16_12.pickle' if use_networks_meta_data else None
+        network_features = data_path + 'graph_dict.pickle' if use_networks_meta_data else None
         for idx, cur_sr_obj in enumerate(sr_objects):
 
-            res = cur_sr_obj.meta_features_handler(features_to_exclude=None, smooth_zero_features=True,
-                                                   network_features=network_features,
-                                                   features_to_include=set(sr_objects[1].explanatory_features))
+            res = cur_sr_obj.meta_features_handler(smooth_zero_features=True,
+                                                   network_features=network_features)
+                                                   #features_to_exclude=set(sr_objects[idx].explanatory_features) - {'submission_amount'})
             # case there was a problem with the function, we will remove the sr from the data
             if res != 0:
-                not_found_sr.append(cur_sr_obj.name)
-            # case we want to model authors sequance instead of sequance of words in a submission
+                missing_srs_due_to_meta_features.append(cur_sr_obj.name)
+            # case we want to model authors sequence instead of sequence of words in a submission
             if model_authors_seq:
                 try:
                     cur_sr_obj.replace_sentences_with_authors_seq(conversations=conversations_seq[cur_sr_obj.name])
                 # case the SR is not in the dict Alex created
                 except KeyError:
-                    not_found_sr.append(cur_sr_obj.name)
+                    missing_srs_due_to_authors_seq.append(cur_sr_obj.name)
+            # submission data under sampling
+            if subsmaple_submissions:
+                cur_sr_obj.subsample_submissions_data(subsample_logic='score', percentage=0.2,
+                                                      maximum_submissions=10, seed=1984)
         duration = (datetime.datetime.now() - start_time).seconds
+        combined_missing_srs = set(missing_srs_due_to_meta_features + missing_srs_due_to_authors_seq)
         print("Ended the process of adding network meta features and converting sentences into authors sequence "
-              "(if it was required). Due to this processes, {} SRs were removed. "
-              "Up to now we ran for {} sec.".format(len(not_found_sr), duration))
+              "(if it was required).\n Network features were not found for {} srs, authors sequance was not found"
+              "for {} SRs. Bottom line, {} will be removed due to these 2 processes."
+              "Up to now we ran for {} sec.".format(len(missing_srs_due_to_meta_features),
+                                                    len(missing_srs_due_to_authors_seq),
+                                                    len(combined_missing_srs),
+                                                    duration))
         # deleting the terrible object :)
         del conversations_seq
         gc.collect()
-        sr_objects = [sr for sr in sr_objects if sr.name not in set(not_found_sr)]
+        sr_objects = [sr for sr in sr_objects if sr.name not in set(combined_missing_srs)]
         # creating the y vector feature and printing status
         y_data = []
         for idx, cur_sr_obj in enumerate(sr_objects):
@@ -221,22 +242,24 @@ if __name__ == "__main__":
             cv_res, pipeline, predictions =\
                 fit_model(sr_objects=sr_objects, y_vector=y_data, tokenizer=reddit_tokenizer, ngram_size=2,
                           use_two_vectorizers=False,
-                          clf_model=xgb.XGBClassifier,
-                          #clf_model=GradientBoostingClassifier,
+                          #clf_model=xgb.XGBClassifier,
+                          clf_model=GradientBoostingClassifier,
                           stop_words=STOPLIST,
                           vectorizers_general_params={'max_df': 0.8, 'min_df': 3, 'max_features': 300},
                           #clf_parmas={'hidden_layer_sizes': (100, 50, 10)})
-                          clf_parmas={'random_state': SEED, 'max_depth': 3,  'n_estimators': 50})
+                          clf_parmas={'random_state': SEED, 'max_depth': 3,  'n_estimators': 100})
                           #clf_parmas={'C': 1.0})
-            save_results_to_csv(start_time=start_time, SRs_amount=len(sr_objects),
-                                models_params=pipeline.steps, results=cv_res, saving_path=os.getcwd())
+            if save_results:
+                save_results_to_csv(start_time=start_time, SRs_amount=len(sr_objects),
+                                    models_params=pipeline.steps, results=cv_res, saving_path=os.getcwd())
+
+                # Analysis phase
+                res_summary = [(y_data[i], predictions[i, 1], sr_objects[i].name) for i in range(len(y_data))]
+                res_summary_df = pd.DataFrame(res_summary, columns=['true_y', 'prediction_to_draw', 'sr_name'])
+                res_summary_df.to_csv(data_path + 'results_summary_submission_based_sampling_bow_plus_meta.csv')
             print("Full modeling code has ended. Results are as follow: {}."
                   "The process started at {} and finished at {}".format(cv_res, start_time, datetime.datetime.now()))
 
-            # Analysis phase
-            res_summary = [(y_data[i], predictions[i,1], sr_objects[i].name) for i in range(len(y_data))]
-            res_summary_df = pd.DataFrame(res_summary, columns=['true_y', 'prediction_to_draw', 'sr_name'])
-            res_summary_df.to_csv(data_path + 'results_summary_including_network_features.csv')
             # pulling out the most dominant features, we need to train again based on the whole data-set
             # CURRENTLY WORKS ONLY WHEN use_two_vectorizers=false!! IF WANTS TO BE FIXED - WE CAN ADD ANOTHER PARAMETER TO
             # 'vectorizer' PARAMETER
@@ -256,9 +279,9 @@ if __name__ == "__main__":
                 if use_external_embedding and not model_authors_seq else None
             eval_measures_dict = {'accuracy': accuracy_score, 'precision': precision_score, 'recall': recall_score}
             dl_obj = NNClassifier(tokenizer=reddit_tokenizer, eval_measures=eval_measures_dict,
-                                  model_type='lstm', emb_size=300, hid_size=150,
-                                  epochs=10, use_bilstm=False, use_meta_features=True, model_sentences=False,
-                                  maximum_sent_per_sr=10, seed=1984)
+                                  model_type='lstm', emb_size=300, hid_size=500, early_stopping=True,
+                                  epochs=20, use_bilstm=False, use_meta_features=True, model_sentences=False,
+                                  maximum_sent_per_sr=None, seed=1984)
             cv_obj = StratifiedKFold(n_splits=5, random_state=SEED)
             cv_obj.get_n_splits(sr_objects, y_data)
             all_test_data_pred = []
@@ -268,12 +291,12 @@ if __name__ == "__main__":
                 cur_test_sr_objects = [sr_objects[i] for i in test_index]
                 cur_y_train = [y_data[i] for i in train_index]
                 cur_y_test = [y_data[i] for i in test_index]
-                cur_results, cur_model, cur_test_predictions = \
-                    dl_obj.fit_two_layers_lstm(train_data=cur_train_sr_objects, test_data=cur_test_sr_objects,
-                                               embedding_file=embedding_file, second_layer_as_lstm=False)
-
                 #cur_results, cur_model, cur_test_predictions = \
-                #    dl_obj.fit_simple_mlp(train_data=cur_train_sr_objects, test_data=cur_test_sr_objects)
+                #    dl_obj.fit_two_layers_lstm(train_data=cur_train_sr_objects, test_data=cur_test_sr_objects,
+                #                               embedding_file=embedding_file, second_layer_as_lstm=False)
+
+                cur_results, cur_model, cur_test_predictions = \
+                    dl_obj.fit_simple_mlp(train_data=cur_train_sr_objects, test_data=cur_test_sr_objects)
 
                 print("Fold # {} has ended, updated results list is: {}".format(cv_idx, cur_results))
                 cur_test_sr_names = [sr_obj.name for sr_obj in cur_test_sr_objects]
@@ -296,7 +319,7 @@ if __name__ == "__main__":
 
                 # Analysis phase, saving the required data to a csv file
                 res_summary_df = pd.DataFrame(all_test_data_pred, columns=['true_y', 'prediction_to_draw', 'sr_name'])
-                res_summary_df.to_csv(data_path + 'dl_results.csv', index=False)
+                res_summary_df.to_csv(data_path + 'dl_sentences_modeling_100_sent_length.csv', index=False)
 
             '''
             cur_test_sr_name_with_y = {sr_obj.name: sr_obj.trying_to_draw for sr_obj in cur_test_sr_objects}

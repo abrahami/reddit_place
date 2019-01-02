@@ -13,10 +13,11 @@ import json
 import csv
 import lzma
 import pickle
+import collections
 from collections import OrderedDict, defaultdict
 
 ###################################################### Configurations ##################################################
-data_path = '/home/isabrah/reddit_data/' if sys.platform == 'linux' \
+data_path = '/data/home/orentsur/data/reddit_place/' if sys.platform == 'linux' \
     else 'C:\\Users\\abrahami\\Documents\\Private\\Uni\\BGU\\PhD\\reddit canvas\\data\\'
 data_to_process = 'both'   # can be either 'submission' / 'comments' / 'both'
 included_years = [2017]
@@ -143,8 +144,8 @@ def general_loader(data_path, sr_to_include=None, saving_path=os.getcwd(), load_
                   "Current comments size is {}".format(comm_idx+1, duration, len(comments)))
 
 
-def sr_sample(data_path, sample_size, threshold_to_define_as_drawing, internal_sr_metadata=True,
-              sr_statistics_usage=True, balanced_sampling_based_sr_size=False, seed=1984):
+def sr_sample_based_subscribers(data_path, sample_size, threshold_to_define_as_drawing, internal_sr_metadata=True,
+                               sr_statistics_usage=True, balanced_sampling_based_sr_size=False, seed=1984):
     """
     sampling group of SRs to be later used for modeling. This group is in most cases the 'not-drawing' teams. We will
     use meta-data for sampling purposes, either internal meta-data or external one
@@ -342,20 +343,124 @@ def _sample_srs_based_size(drawing_srs_data, not_drawing_srs_data, size):
         # case we haven't reached the end of the drawing group, we will continue iterating over it
         if drawing_cur_idx < len(drawing_srs_data) - 1:
             drawing_cur_idx += 1
-        # case we did reach the end of this group, we will start a new "cycle" of sampling
+        # case we did reach the end of this group, we will start a new "cycle" of sampling, but not from the begining,
+        # since then our sample would be biased towrds small submissions amount SRs
         else:
-            drawing_cur_idx = 0
+            drawing_cur_idx = int(len(drawing_srs_mapping) * 1.0 / 2.0)
             not_drawing_cur_idx = 0
     print("Summary of the _sample_srs_based_size function: we sampled {} SRs."
           "Total difference according to the data is: {}".format(len(chosen_srs), sum(diffs)))
     return [sr.lower() for sr in chosen_srs], diffs
 
 
+def sr_sample_based_submissions(data_path, sample_size, threshold_to_define_as_drawing,
+                                start_peoriod='2017-01', end_period='2017-03', seed=1984):
+    """
+    DOCUMNET HERE AGIAN (NOT UPDATED)
+    sampling group of SRs to be later used for modeling. This group is in most cases the 'not-drawing' teams. We will
+    use meta-data for sampling purposes, either internal meta-data or external one
+
+    """
+    start_time = datetime.datetime.now()
+
+    # location of the csv
+    csv_path = \
+        data_path + 'place_classifier_csvs/' if sys.platform == 'linux' else data_path + 'place_classifier_csvs\\'
+    # finding all the relevant zip files in the 'data_path' directory
+    submission_files = [f for f in os.listdir(csv_path) if re.match(r'RS.*\.csv', f)]
+    # taking only the submissions files from 10-2016 to 03-2017 by default
+    submission_files = [i for i in submission_files if 'RS_'+start_peoriod + '.csv' <= i <= 'RS_'+end_period+'.csv']
+    submission_files = sorted(submission_files)
+    tot_srs_counter = collections.Counter()
+    # iterating over each submission file
+    for subm_idx, cur_submission_file in enumerate(submission_files):
+        cur_submission_df = pd.read_csv(filepath_or_buffer=csv_path + cur_submission_file, encoding='utf-8')
+        # making sure the the date is not after r/place started
+        cur_submission_df = cur_submission_df[cur_submission_df['created_utc_as_date'] < '2017-03-29 00:00:00']
+        cur_sr_submissions = cur_submission_df["subreddit"].str.lower()
+        cur_srs_counter = collections.Counter(cur_sr_submissions)
+        tot_srs_counter = tot_srs_counter + cur_srs_counter
+    srs_counter_ordered = collections.OrderedDict(sorted(tot_srs_counter.items(), key=lambda t: t[1], reverse=True))
+    # in order to see the first (and highest SR) - list(srs_counter_ordered.items())[0]
+    # pulling out drawing srs information
+    place_related_srs = pd.read_excel(io=data_path + 'subreddits_revealed/'
+                                                     'all_subredditts_based_atlas_and_submissions.xlsx'
+                                      if sys.platform == 'linux' else data_path + 'sr_relations\\all_subredditts_based'
+                                                                                  '_atlas_and_submissions.xlsx',
+                                      sheet_name='Detailed list')
+    drawing_srs = place_related_srs[(place_related_srs['trying_to_draw'] == 'Yes') |
+                                    (place_related_srs['models_prediction'] > threshold_to_define_as_drawing)]['SR']
+    # creating sets for the drawing/not-drawing teams
+    drawing_srs = set([str(name).lower() for name in drawing_srs
+                           if str(name).lower() in srs_counter_ordered.keys()])
+    sr_basic_names = set([str(name).lower() for name in srs_counter_ordered.keys()])
+    not_drawing_srs = {name for name in sr_basic_names if name not in drawing_srs}
+    # handling the sample size parameter
+    if type(sample_size) is str:
+        ratio = sample_size.split(':')
+        sample_amount = int(float(ratio[0])*1.0 / float(ratio[1])*1.0 * len(drawing_srs))
+    elif type(sample_size) is int and sample_size > 1:
+        sample_amount = sample_size
+    elif type(sample_size) is float and 0 < sample_size < 1:
+        sample_amount = int(sample_size * len(not_drawing_srs))
+    else:
+        print("Current parameter type is not supported yet")
+        return 1
+    # now sampling the 'not_drawing_srs' population
+
+    drawing_srs_dict = {str(k).lower(): int(v) for k, v in srs_counter_ordered.items() if k in drawing_srs}
+    not_drawing_srs_dict = {str(k).lower(): int(v) for k, v in srs_counter_ordered.items() if k in not_drawing_srs}
+    chosen_srs, diffs = _sample_srs_based_size(drawing_srs_data=drawing_srs_dict,
+                                               not_drawing_srs_data=not_drawing_srs_dict, size=sample_amount)
+
+    # loading file with meta data about SRs, in order to return additioanl information aobut the returned SRs
+    srs_meta_data = defaultdict(list)
+    with open(data_path + 'srs_meta_data_102016_to_032017.json') as f:
+        for idx, line in enumerate(f):
+            cur_line = json.loads(line)
+            cur_sr_name = str(cur_line['display_name']).lower()
+            # case we already 'met' this sr, we'll take the max out of all subscribers amount we see
+            if cur_sr_name in srs_meta_data:
+                srs_meta_data[cur_sr_name] = [max(cur_line['subscribers'], srs_meta_data[cur_sr_name][0]),
+                                              cur_line['created']]
+
+            elif cur_line['subscribers'] is not None:
+                srs_meta_data[cur_sr_name] = [cur_line['subscribers'], cur_line['created']]
+    sr_basic = pd.DataFrame.from_dict(data=srs_meta_data, orient='index')
+    sr_basic.reset_index(inplace=True)
+    sr_basic.columns = ['subreddit_name', 'number_of_subscribers', 'creation_epoch']
+    sr_basic['number_of_subscribers'] = pd.to_numeric(sr_basic['number_of_subscribers'])
+
+    # adding explicit timestamp to the data and filtering SRs which were created before r/place started
+    sr_basic = sr_basic.assign(created_utc_as_date=pd.to_datetime(sr_basic['creation_epoch'], unit='s'))
+    sr_basic = sr_basic[sr_basic['created_utc_as_date'] < '2017-03-31 00:00:00']
+
+    # using the data we pulled out, we will connect between the two and return the needed information
+    chosen_srs_full_info = sr_basic[sr_basic['subreddit_name'].str.lower().isin(chosen_srs)][['subreddit_name',
+                                                                                              'number_of_subscribers',
+                                                                                              'created_utc_as_date']]
+    # returning results in a list format - each item is a tuple of 3. First is the name in lower-case letters,
+    # second is the # of users in this SR and third is the creation date
+    results = [(str(x[1]).lower(), x[2], x[3], 'not_drawing') for x in chosen_srs_full_info.itertuples()]
+    # adding the drawing teams to the party and sending results
+    chosen_srs_full_info2 = place_related_srs[place_related_srs['SR'].isin(drawing_srs)][['SR', 'num_of_users', 'creation_utc']]
+    results2 = [(str(x[1]).lower(), x[2], x[3], 'drawing') for x in chosen_srs_full_info2.itertuples()]
+    duration = (datetime.datetime.now() - start_time).seconds
+    print("'sr_sample_based_submissions' function has ended, total of {} not drawing teams and {} of drawing teams were"
+          " suggested to be used. Took us {} seconds".format(len(results), len(results2), duration))
+    return results2 + results
+
+
 if __name__ == "__main__":
     start_time = datetime.datetime.now()
-    general_loader(data_path=data_path, saving_path=data_path + 'place_classifier_csvs', load_only_columns_subset=True)
-    #res = sr_sample(data_path=data_path, sample_size='1:1', threshold_to_define_as_drawing=0.7)
+    #general_loader(data_path=data_path, saving_path=data_path + 'place_classifier_csvs', load_only_columns_subset=True)
+    #res = sr_sample_based_subscribers(data_path=data_path, sample_size='1:1', threshold_to_define_as_drawing=0.7)
+    res = sr_sample_based_submissions(data_path=data_path, sample_size='1.1:1', start_peoriod='2017-01',
+                                      end_period='2017-03', threshold_to_define_as_drawing=0.7)
     duration = (datetime.datetime.now() - start_time).seconds
     #print("Finished. Res size is:{}, took us: {}". format(len(res), duration))
-    print("Finished. Took us: {}".format(duration))
+    print("Finished. Took us: {} seconds".format(duration))
+
+
+
 
