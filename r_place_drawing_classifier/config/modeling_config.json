@@ -1,0 +1,100 @@
+{
+	"model_version": "0.1",
+	"description": "bow_model",
+	"random_seed": 1984,
+	"code_dir": {
+		"yalla": "/data/home/isabrah/reddit_project_sync_with_git_and_own_pc",
+		"ABRAHAMI-MOBL2": "C:\\Users\\ABRAHAMI\\Documents\\Private\\Uni\\BGU\\PhD\\reddit_canvas\\reddit_proj_with_yalla_cluster"
+	},
+	"data_dir": {
+		"yalla": "/data/home/orentsur/data/reddit_place",
+		"ABRAHAMI-MOBL2": "C:\\Users\\ABRAHAMI\\Documents\\Private\\Uni\\BGU\\PhD\\reddit_canvas\\data"
+	},
+	"results_dir": {
+		"yalla": "/data/home/isabrah/reddit_canvas/results/drawing_classifier_res",
+		"ABRAHAMI-MOBL2": "C:\\Users\\ABRAHAMI\\Documents\\Private\\Uni\\BGU\\PhD\\reddit_canvas\\results\\drawing_classifier_res"
+	},
+	"srs_obj_file": {
+		"yalla": "sr_objects_6_months_sampling_based_submission_30_12_2018.p",
+		"ABRAHAMI-MOBL2": "sr_objects_102016_to_032017_sample.p"
+	},
+	"results_file": {
+		"yalla": "place_drawing_classifier_results_submission_based_sampling.csv",
+		"ABRAHAMI-MOBL2": "place_drawing_classifier_results_submission_based_sampling.csv"
+	},
+	
+	"saving_options": {
+		"measures": "False",
+		"raw_level_pred": "False",
+		"analysis": "False"
+	},
+	"comments_usage": {
+		"meta_data": "True",
+		"corpus": "False"
+	},
+	"biggest_srs_removal": {
+		"should_remove": "True",
+		"quantile": 0.2
+	},
+	"submissions_sampling": {
+		"should_sample": "True",
+		"sampling_logic": "score",
+		"percentage": 0.5,
+		"max_subm": 5
+	},
+	"embedding": {
+		"emb_size": 300,
+		"use_pretrained": "False",
+		"file_path": { 
+			"yalla": "embedding/glove.42B.300d.txt",
+			"ABRAHAMI-MOBL2": "embedding\\glove.42B.300d.txt"
+		}
+	},
+	"meta_data_usage": {
+		"use_meta": "True",
+		"use_network": "False",
+		"network_file_path": {
+			"yalla": "graph_dict.pickle",
+			"ABRAHAMI-MOBL2": "graph_dict.pickle"
+		}
+	},
+	"cv": {
+		"folds": 5
+	},
+	"class_model": {
+		"model_type": "mlp",
+		"authors_seq": {
+			"use_authors_seq": "False",
+			"authors_seq_file_path": {
+				"yalla": "combined_seq.pkl",
+				"ABRAHAMI-MOBL2": "combined_seq.pkl"
+			}
+		},
+		"clf_params": {
+			"clf": "GradientBoostingClassifier",
+			"max_depth": 3,
+			"n_estimators": 100,
+			"random_state": 1984
+		},
+		"bow_params": {
+			"ngram_size": 2,
+			"use_two_vectorizers": "False",
+			"vectorizer_params": {
+				"max_df": 0.8,
+				"min_df": 3,
+				"max_features": 300
+			}
+		},
+		"nn_params": {
+			"epochs": 100,
+			"hid_size": 150,
+			"early_stopping": "True"
+		},
+		"mlp_params": {
+			"with_embed": "True"
+		},
+		"parallel_lstm_params": {
+			"use_bilstm": "False"
+		}
+	}
+}
