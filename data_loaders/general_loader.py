@@ -364,8 +364,7 @@ def sr_sample_based_submissions(data_path, sample_size, threshold_to_define_as_d
     start_time = datetime.datetime.now()
 
     # location of the csv
-    csv_path = \
-        data_path + 'place_classifier_csvs/' if sys.platform == 'linux' else data_path + 'place_classifier_csvs\\'
+    csv_path = os.path.join(data_path, 'place_classifier_csvs')
     # finding all the relevant zip files in the 'data_path' directory
     submission_files = [f for f in os.listdir(csv_path) if re.match(r'RS.*\.csv', f)]
     # taking only the submissions files from 10-2016 to 03-2017 by default
@@ -383,10 +382,8 @@ def sr_sample_based_submissions(data_path, sample_size, threshold_to_define_as_d
     srs_counter_ordered = collections.OrderedDict(sorted(tot_srs_counter.items(), key=lambda t: t[1], reverse=True))
     # in order to see the first (and highest SR) - list(srs_counter_ordered.items())[0]
     # pulling out drawing srs information
-    place_related_srs = pd.read_excel(io=data_path + 'subreddits_revealed/'
-                                                     'all_subredditts_based_atlas_and_submissions.xlsx'
-                                      if sys.platform == 'linux' else data_path + 'sr_relations\\all_subredditts_based'
-                                                                                  '_atlas_and_submissions.xlsx',
+    place_related_srs = pd.read_excel(io=os.path.join(data_path, 'subreddits_revealed',
+                                                      'all_subredditts_based_atlas_and_submissions.xlsx'),
                                       sheet_name='Detailed list')
     drawing_srs = place_related_srs[(place_related_srs['trying_to_draw'] == 'Yes') |
                                     (place_related_srs['models_prediction'] > threshold_to_define_as_drawing)]['SR']
@@ -415,7 +412,7 @@ def sr_sample_based_submissions(data_path, sample_size, threshold_to_define_as_d
 
     # loading file with meta data about SRs, in order to return additioanl information aobut the returned SRs
     srs_meta_data = defaultdict(list)
-    with open(data_path + 'srs_meta_data_102016_to_032017.json') as f:
+    with open(os.path.join(data_path, 'srs_meta_data_102016_to_032017.json')) as f:
         for idx, line in enumerate(f):
             cur_line = json.loads(line)
             cur_sr_name = str(cur_line['display_name']).lower()

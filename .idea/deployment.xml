@@ -12,7 +12,7 @@
       <paths name="isabrah@localhost:6000">
         <serverdata>
           <mappings>
-            <mapping deploy="/home/isabrah/reddit_project_sync_with_git_and_own_pc" local="$PROJECT_DIR$" />
+            <mapping deploy="/reddit_project_sync_with_git_and_own_pc" local="$PROJECT_DIR$" web="/reddit_pycharm_proj_with_own_pc" />
           </mappings>
         </serverdata>
       </paths>

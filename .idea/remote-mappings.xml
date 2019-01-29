@@ -6,7 +6,13 @@
         <remote-mappings server-id="python@c997927f-5745-4972-8ada-9ce8fa9db948" />
         <remote-mappings server-id="python@sftp://isabrah@don01.sise.bgu.ac.il:48881/usr/bin/python3" />
         <remote-mappings server-id="python@sftp://isabrah@yalla00.ise.bgu.ac.il:48881/home/isabrah/anaconda3/bin/python3" />
-        <remote-mappings server-id="python@sftp://isabrah@localhost:6000/home/isabrah/anaconda3/bin/python3" />
+        <remote-mappings server-id="python@sftp://isabrah@localhost:6000/home/isabrah/anaconda3/bin/python3">
+          <settings>
+            <list>
+              <mapping local-root="$PROJECT_DIR$" remote-root="/home/isabrah/reddit_project_sync_with_git_and_own_pc" />
+            </list>
+          </settings>
+        </remote-mappings>
       </list>
     </list>
   </component>

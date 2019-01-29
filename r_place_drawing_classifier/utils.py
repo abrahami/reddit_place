@@ -14,7 +14,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-def get_submissions_subset(files_path, srs_to_include):
+def get_submissions_subset(files_path, srs_to_include, start_month='2016-10', end_month='2017-03'):
     """
     pulling our subset of the submission data, which is related to the list of SRs given as input. This is very
     simple "where" statement
@@ -29,7 +29,8 @@ def get_submissions_subset(files_path, srs_to_include):
     # finding all the relevant zip files in the 'data_path' directory
     submission_files = [f for f in os.listdir(files_path) if re.match(r'RS.*\.csv', f)]
     # taking only the submissions files from 10-2016 to 03-2017
-    submission_files = [i for i in submission_files if 'RS_2016-10.csv' <= i <= 'RS_2017-03.csv']
+    submission_files = [i for i in submission_files if
+                        ''.join(['RS_', start_month, '.csv']) <= i <= ''.join(['RS_', end_month, '.csv'])]
     submission_files = sorted(submission_files)
     submission_dfs = []
     # iterating over each submission file
@@ -49,7 +50,7 @@ def get_submissions_subset(files_path, srs_to_include):
     return full_submissions_df
 
 
-def get_comments_subset(files_path, srs_to_include):
+def get_comments_subset(files_path, srs_to_include, start_month='2016-10', end_month='2017-03'):
     """
     pulling our subset of the commnets data, which is related to the list of SRs given as input. This is very
     simple "where" statement
@@ -62,7 +63,8 @@ def get_comments_subset(files_path, srs_to_include):
     """
     start_time = datetime.datetime.now()
     comments_files = [f for f in os.listdir(files_path) if re.match(r'RC.*\.csv', f)]
-    comments_files = [i for i in comments_files if 'RC_2016-10.csv' <= i <= 'RC_2017-03.csv']
+    comments_files = [i for i in comments_files if
+                      ''.join(['RC_', start_month, '.csv']) <= i <= ''.join(['RC_', end_month, '.csv'])]
     comments_files = sorted(comments_files)
     comments_dfs = []
     for comm_idx, cur_comments_file in enumerate(comments_files):
@@ -121,15 +123,17 @@ def calc_sr_statistics(files_path, included_years, saving_res_path=os.getcwd()):
     return sr_statistics
 
 
-def save_results_to_csv(start_time, SRs_amount, models_params, results, saving_path=os.getcwd()):
+def save_results_to_csv(results_file, start_time, SRs_amount, config_dict, results, saving_path=os.getcwd()):
     '''
     given inputs regarding a final run results - write these results into a file
+    :param results_file: str
+        file of the csv where results should be placed
     :param start_time: datetime
         time when the current result run started
     :param SRs_amount: int
         amount of SRs the run was based on, usually it is between 1000-2500
-    :param models_params: dict
-        dictionary holding all the model parameters. This is a complex list of features
+    :param config_dict: dict
+        dictionary holding all the configuration of the run, the one we get as input json
     :param results: dict
         dictionary with all results. Currently it should contain the following keys: 'accuracy', 'precision', 'recall'
     :param saving_path: str
@@ -144,7 +148,7 @@ def save_results_to_csv(start_time, SRs_amount, models_params, results, saving_p
     with rf as output_file:
         dict_writer = csv.DictWriter(output_file,
                                      fieldnames=['timestamp', 'start_time', 'machine', 'SRs_amount', 'cv_folds',
-                                                 'models_params', 'accuracy', 'precision', 'recall'])
+                                                 'configurations', 'accuracy', 'precision', 'recall'])
         # only in case the file doesn't exist, we'll add a header
         if not file_exists:
             dict_writer.writeheader()
@@ -154,7 +158,7 @@ def save_results_to_csv(start_time, SRs_amount, models_params, results, saving_p
             host_name = 'pycharm with this ssh: '+ os.environ['SSH_CONNECTION']
         dict_writer.writerow({'timestamp': datetime.datetime.now(), 'start_time': start_time, 'SRs_amount': SRs_amount,
                               'machine': host_name, 'cv_folds': len(results['accuracy']),
-                              'models_params': models_params, 'accuracy': results['accuracy'],
+                              'configurations': config_dict, 'accuracy': results['accuracy'],
                               'precision': results['precision'], 'recall': results['recall']})
     rf.close()
 

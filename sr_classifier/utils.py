@@ -10,7 +10,7 @@ from clean_text_transformer import CleanTextTransformer
 import datetime
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
-from xgboost import XGBClassifier
+#from xgboost import XGBClassifier
 from sklearn.model_selection import StratifiedKFold, cross_val_score, cross_validate, cross_val_predict
 from sklearn.pipeline import Pipeline, FeatureUnion
 from sklearn.feature_extraction import DictVectorizer
@@ -98,7 +98,7 @@ def examine_word(examined_word, vectorizer, train_corpus, N=5, verbose=True):
 
 def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_model=LogisticRegression,
               clf_parmas=None, stop_words=STOPLIST, ngram_size=2,
-              vectorizers_general_params={'max_df': 0.8, 'min_df': 5}, ):
+              vectorizers_general_params={'max_df': 0.8, 'min_df': 5}, meta_features_only=False):
     """
     Training a classification model, in order to distinguish between two types of sub-reddit (SR) groups - those that
     are trying to draw something in r/place and those that don't.
@@ -124,12 +124,18 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
         ngrams sequence to be used in the vectorizer.
     :param vectorizers_general_params: dict or None, default = {'max_df': 0.8, 'min_df': 5}
         hyper parameters to be used in the vectorizer object. Will be passes with the ** operation into the object
+    :param meta_features_only: bool
+        indicator whether or not to build a model which is built upon meta features alone. No lingustic features
+        at all will be used in such case.
     :return: tuple (with 3 elements)
         results - results of the model as returned by the 'cross_validate' object
         pipeline - the pipline object which was used for training (after the fit process)
         predictions - the prediciton to each sr, based on the cv we ran
     """
     start_time = datetime.datetime.now()
+    # in case the clf_parmas dictionary holds the object of the classifier, we will remove it
+    if 'clf' in clf_parmas.keys():
+        clf_parmas.pop('clf')
     ctt = CleanTextTransformer(marking_method={'urls': 'replace', 'coordinates': 'replace'})
     # case we would like to split the vectorizer into 1-gram and n-gram (n>1) objects
     if use_two_vectorizers:
@@ -174,10 +180,7 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
             # Use the defined classifier on the combined features
             ('clf', clf),
         ])
-    else:
-
-        vectorizer = TfidfVectorizer(tokenizer=tokenizer, ngram_range=(1, ngram_size), stop_words=stop_words,
-                                     **vectorizers_general_params)
+    elif meta_features_only:
         dict_vectorizer = DictVectorizer()
         if clf_parmas is None:
             clf = clf_model()
@@ -185,36 +188,6 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
             clf = clf_model(**clf_parmas)
 
         # pipeline creation, with feature union
-        '''
-        pipeline = Pipeline([
-            # Use FeatureUnion to combine the features from pure text and meta data
-            ('union', FeatureUnion(
-                transformer_list=[
-                    # Pipeline for standard bag-of-words model the text
-                    ('ngram_features', Pipeline([
-                        ('cleanText', ctt),
-                        ('vectorizer', vectorizer),
-                    ])),
-
-                    # Pipeline for handling numeric features (which are stored in each SR object
-                    ('numeric_meta_features', Pipeline([
-                        ('feature_extractor', MetaFeaturesExtractor()),
-                        ('vect', dict_vectorizer),  # list of dicts -> feature matrix
-                        ('imputer', Imputer(strategy="mean", axis=0))
-                    ])),
-
-                ],
-
-                # weight components in FeatureUnion
-                transformer_weights={
-                    'text_features': 1.0,
-                    'numeric_meta_features': 1.0,
-                },
-            )),
-            # Use the defined classifier on the combined features
-            ('clf', clf),
-        ])
-        '''
         # special pipeline in case we wish to run the model only with the meta-features
         pipeline = Pipeline([
             # Use FeatureUnion to combine the features from pure text and meta data
@@ -236,9 +209,43 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
             # Use the defined classifier on the combined features
             ('clf', clf),
         ])
+    else:
+        vectorizer = TfidfVectorizer(tokenizer=tokenizer, ngram_range=(1, ngram_size), stop_words=stop_words,
+                                     **vectorizers_general_params)
+        dict_vectorizer = DictVectorizer()
+        if clf_parmas is None:
+            clf = clf_model()
+        else:
+            clf = clf_model(**clf_parmas)
 
+        # pipeline creation, with feature union
+        pipeline = Pipeline([
+            # Use FeatureUnion to combine the features from pure text and meta data
+            ('union', FeatureUnion(
+                transformer_list=[
+                    # Pipeline for standard bag-of-words model the text
+                    ('ngram_features', Pipeline([
+                        ('cleanText', ctt),
+                        ('vectorizer', vectorizer),
+                    ])),
 
+                    # Pipeline for handling numeric features (which are stored in each SR object
+                    ('numeric_meta_features', Pipeline([
+                        ('feature_extractor', MetaFeaturesExtractor()),
+                        ('vect', dict_vectorizer),  # list of dicts -> feature matrix
+                        ('imputer', Imputer(strategy="mean", axis=0))
+                    ])),
+                ],
 
+                # weight components in FeatureUnion
+                transformer_weights={
+                    'text_features': 1.0,
+                    'numeric_meta_features': 1.0,
+                },
+            )),
+            # Use the defined classifier on the combined features
+            ('clf', clf),
+        ])
     # k-fold CV using stratified strategy
     cv_obj = StratifiedKFold(n_splits=5, random_state=SEED)
 
@@ -250,22 +257,15 @@ def fit_model(sr_objects, y_vector, tokenizer, use_two_vectorizers=True, clf_mod
                                 scoring=scoring, cv=cv_obj, return_train_score=False, verbose=100)
     cross_val_predictions = cross_val_predict(estimator=pipeline, X=sr_objects, y=y_vector,
                                               cv=cv_obj, method='predict_proba')#, n_jobs=cv_obj.n_splits)
-    '''
-    scorer = MultiScorer({
-        'accuracy': (accuracy_score, {}),
-        'precision': (precision_score, {}),
-        'recall': (recall_score, {})
-    })
-    cross_val_score(estimator=pipeline, X=sr_objects, y=y_vector, scoring=scorer_obj, cv=cv_obj,
-                    verbose=100, n_jobs=cv_obj.n_splits)
-    results = scorer.get_results()
-    '''
+
     # pulling out relevant results and giving it proper names
     results = {'accuracy': list(cv_results['test_acc']), 'precision': list(cv_results['test_precision']),
                'recall': list(cv_results['test_recall'])}
+
     duration = (datetime.datetime.now() - start_time).seconds
     print("End of fit model function. This function run took us : {} seconds".format(duration))
     return results, pipeline, cross_val_predictions
+    
 
 
 def predict_model(pipeline, sr_objects, predict_proba=True):
@@ -273,7 +273,7 @@ def predict_model(pipeline, sr_objects, predict_proba=True):
     runs a prediction process over SR objects, using on a pipeline modeling process. It assumes the pipeline is already
     fitted
     :param pipeline: object
-         sklearn pipeline obejct, traind using the 'fit_single_layer_lstm' function
+         sklearn pipeline obejct, traind using the 'fit_predict' function
     :param sr_objects: list
         list of SubReddit objects. These SRs should be used for training and are labeled as trying to draw or not
     :param predict_proba: bool, default = True

@@ -265,7 +265,7 @@ class SubReddit(object):
             coordinates_found*1.0/self.explanatory_features["submission_amount"]
 
     def meta_features_handler(self, features_to_exclude=None, features_to_include=None, smooth_zero_features=True,
-                              network_features=None):
+                              net_feat_file=None):
         '''
         aligning the meta features of each sr, so it can be used later in modeling phase. This is not a mandatory
         phase of the data-prep at all
@@ -280,15 +280,15 @@ class SubReddit(object):
         :param smooth_zero_features: bool. Default: True
             converting zero value features to the smallest value (positive) we can. This is useful in case we
             run DL models, and the gradient cannot converge with zero divided by zero cases
-        :param network_features: bool. Default: None
+        :param net_feat_file: bool. Default: None
             full path (including the file name) to the pickle file holding the network meta features information.
             The format of the pickle file should be dictionary of dictionaries. The first dict contains the SR names
             as key, and the value is another dict which holds the feature names+values
         :return:
         '''
         # add the network features to the list of features we use in modeling
-        if network_features is not None:
-            graph_meta_features = pickle.load(open(network_features, "rb"))
+        if net_feat_file is not None:
+            graph_meta_features = pickle.load(open(net_feat_file, "rb"))
             try:
                 cur_features = pd.Series(json_normalize(graph_meta_features[self.name]).iloc[0])
                 cur_features = dict(cur_features.to_dict())

@@ -2,6 +2,7 @@
   <dictionary name="abrahami">
     <words>
       <w>ngram</w>
+      <w>perceptron</w>
       <w>reddit</w>
       <w>vectorizer</w>
     </words>
