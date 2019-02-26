@@ -1,29 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="isabrah@localhost:6000">
+  <component name="PublishConfigData" autoUpload="On explicit save action" serverName="isabrah@localhost:6000">
     <serverData>
-      <paths name="isabrah@don01.sise.bgu.ac.il:48881">
-        <serverdata>
-          <mappings>
-            <mapping deploy="/reddit_pycharm_proj_with_own_pc" local="$PROJECT_DIR$" web="/reddit_pycharm_proj_with_own_pc" />
-          </mappings>
-        </serverdata>
-      </paths>
       <paths name="isabrah@localhost:6000">
         <serverdata>
           <mappings>
-            <mapping deploy="/reddit_project_sync_with_git_and_own_pc" local="$PROJECT_DIR$" web="/reddit_pycharm_proj_with_own_pc" />
-          </mappings>
-        </serverdata>
-      </paths>
-      <paths name="isabrah@yalla00.ise.bgu.ac.il:48881">
-        <serverdata>
-          <mappings>
-            <mapping deploy="/reddit_project_sync_with_git_and_own_pc" local="$PROJECT_DIR$" />
+            <mapping deploy="/reddit_canvas/reddit_project_with_yalla_cluster" local="$PROJECT_DIR$" />
           </mappings>
         </serverdata>
       </paths>
     </serverData>
-    <option name="myAutoUpload" value="ALWAYS" />
+    <option name="myAutoUpload" value="ON_EXPLICIT_SAVE" />
   </component>
 </project>

@@ -4,6 +4,8 @@
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/sr_classifier" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/r_place_drawing_classifier" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/reddit-tools" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$" isTestSource="false" />
     </content>
     <orderEntry type="jdk" jdkName="Remote Python 3.7.0 (sftp://isabrah@localhost:6000/home/isabrah/anaconda3/bin/python3)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
