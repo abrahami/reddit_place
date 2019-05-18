@@ -10,3 +10,5 @@ else:
     home_path = join('C:', sep, 'home', 'local', 'BGU-USERS', 'shanisa', 'NLP')
 # endregion
 
+SEED = 7
+
