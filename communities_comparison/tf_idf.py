@@ -21,16 +21,21 @@ def add_w_count(model, all_wc):
     return all_wc
 
 
-def add_wd_count(model, all_wdc):
+def add_wd_count(model, all_wdc, n_wc):
     """
 
     :param model: Gensim model- to retrieve its words
     :param all_wdc: Dict- the cumulative count of documents containing each word (including words from all models)
+    :param n_wc: file name for wc
     :return: Dict- the updated cumulative count of documents containing each word
     """
     dc = dict()
-    for k in model.wv.vocab.keys():
+    wc = dict()
+    for (k, v) in model.wv.vocab.items():
         dc[k] = 1  # add 1 document count to the words appear in the current document (community)
+        wc[k] = v.count  # add 1 document count to the words appear in the current document (community)
+    with open(join(c.tf_idf_path, n_wc + '.pickle'), 'wb') as handle:
+        pickle.dump(wc, handle, protocol=pickle.HIGHEST_PROTOCOL)
     all_wdc = {k: all_wdc.get(k, 0) + dc.get(k, 0) for k in set(all_wdc) | set(dc)}
     return all_wdc
 
@@ -53,7 +58,8 @@ def calc_idf(m_names, m_type, calc):
                 print(f" i: {i}, model name: {m_name}")
             curr_model = load_model(path=c.data_path, m_type=m_type, name=m_name)
             # total_wc = add_w_count(model=curr_model, all_wc=total_wc)
-            total_wdc = add_wd_count(model=curr_model, all_wdc=total_wdc)
+            n_wc = 'wc_' + m_name
+            total_wdc = add_wd_count(model=curr_model, all_wdc=total_wdc, n_wc=n_wc)  # save dict of wc
 
         # idf (inverse document frequency):  idf(t, D) = log(N / |{d in D : t in T}|)
         #      dividing the total number of documents by the number of documents containing the term,
@@ -67,10 +73,10 @@ def calc_idf(m_names, m_type, calc):
     return idf
 
 
-def calc_tf_idf(model, m_f_name, idf):
+def calc_tf_idf(wc, m_f_name, idf):
     """
 
-    :param model: Gensim model. count its words' frequency, and calc its tf-idf.
+    :param wc: Dict. words count of the model to calc its tf-idf.
     :param m_f_name: String. name for saving model's tf-idf file.
     :param idf: Dict. idf score for each word in the corpus (words from all communities).
     :return: None.  save 'tf-idf' vector per community.
@@ -78,7 +84,7 @@ def calc_tf_idf(model, m_f_name, idf):
     # tf (term frequency):  tf(t,d)= f[t,d] (the raw count of term t in document d)
     # tf_idf(t,d,D) = tf(t,d) * idf(t,D)
 
-    tf_idf = {k: v.count * idf.get(k) for (k, v) in model.wv.vocab.items()}
+    tf_idf = {k: v * idf.get(k) for (k, v) in wc.items()}
     with open(join(c.tf_idf_path, m_f_name + '.pickle'), 'wb') as handle:
         pickle.dump(tf_idf, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -90,8 +96,10 @@ def calc_tf_idf_all_models(m_names, m_type):
     for i, m_name in enumerate(m_names):
         if i % 100 == 0:
             print(f" i: {i}, model name: {m_name}")
-        curr_model = load_model(path=c.data_path, m_type=m_type, name=m_name)
-        f_name = 'tf_idf_' + m_name
-        calc_tf_idf(model=curr_model, m_f_name=f_name, idf=idf)
+        wc_f_name = 'wc_' + m_name
+        with open(join(c.tf_idf_path, wc_f_name + '.pickle'), 'rb') as handle:
+            wc = pickle.load(handle)
+        m_f_name = 'tf_idf_' + m_name
+        calc_tf_idf(wc=wc, m_f_name=m_f_name, idf=idf)
     return
 

@@ -14,6 +14,7 @@ import pandas as pd
 from scipy.spatial.distance import pdist, squareform
 from operator import itemgetter
 import pickle
+import time
 
 
 def generate_weights(model):
@@ -101,6 +102,7 @@ def compare(n_model_1, n_model_2, weights_1, weights_2):
     :param weights_2: Dict. weight for each word in model 2 vocab.
     :return:
     """
+    start = time.time()
     model_1 = load_model(path=c.data_path, m_type=c.MODEL_TYPE, name=n_model_1)
     model_2 = load_model(path=c.data_path, m_type=c.MODEL_TYPE, name=n_model_2)
 
@@ -110,11 +112,10 @@ def compare(n_model_1, n_model_2, weights_1, weights_2):
     # 2- intersection
     intersec = np.intersect1d(wv_1.index2entity, wv_2.index2entity)
     wc1, wc2, wc_inter = len(wv_1.index2entity), len(wv_2.index2entity), len(intersec)
-    print(f"\n words count- model_1: {wc1}, model_2: {wc2}, "
-          f"intersection: {wc_inter}")
     wv_1_inter, wv_2_inter = wv_1[list(intersec)], wv_2[list(intersec)]
 
     # 3- calc vectors distances
+    print("\ncalc distances")
     dis_metric = 'cosine'
     dis_1 = calc_vec_distances(vectors_matrix=wv_1_inter, metric=dis_metric)
     dis_2 = calc_vec_distances(vectors_matrix=wv_2_inter, metric=dis_metric)
@@ -129,17 +130,15 @@ def compare(n_model_1, n_model_2, weights_1, weights_2):
     # weight per pair of words in intersection (max of the 2 elements in pair)
     f_name = 'pair_w_' + n_model_1 + '_' + n_model_2
     w_pairs = calc_pairwise_weights(arr=w_intersec, normalize=False, calc=True)
-    print(f"sum of w_pairs: {sum(w_pairs)}")
 
     # 5- select top weights + normalize
     w_pairs = select_top_weights(arr=w_pairs, top_perc=25)
-    print(f"sum of w_pairs_t: {sum(w_pairs)}")
+    print(f"sum of top w_pairs: {sum(w_pairs)}")
 
     # 6- compare communities
     print("\ncompare communities")
     score = calc_distance_between_comm(d1=dis_1, d2=dis_2, w=w_pairs)  # w=np.ones(len(dis_1))
-    print(f"score: {score}")
-
+    print(f"")
     return score, wc1, wc2, wc_inter
 
 

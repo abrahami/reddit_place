@@ -8,17 +8,19 @@ if p.system() == 'Windows':
         data_path = join('C:', sep, 'Users', 'ssarusi', 'Desktop', 'second_degree', 'semester_d', 'NLP')
         tf_idf_path = join('C:', sep, 'Users', 'ssarusi', 'Desktop', 'second_degree', 'semester_d', 'NLP', 'tf_idf')
         scores_path = join('C:', sep, 'Users', 'ssarusi', 'Desktop', 'second_degree', 'semester_d', 'NLP', 'scores')
+        TOP = 2
 else:
     data_path = join('C:', sep, 'data', 'home', 'orentsur', 'data', 'reddit_place', 'embedding', 'embedding_per_sr')
     # todo- update paths
     tf_idf_path = join('C:', sep, 'data', 'home', 'shanisa')
     scores_path = join('C:', sep, 'data', 'home', 'shanisa')
+    TOP = 100
 
 # endregion
 
 CALC_TF_IDF = True
 CALC_SCORES = True
-VISUALIZATION = True
+VISUALIZATION = False
 
 SEED = 7
 MODEL_TYPE = '1'  # Word2Vec
