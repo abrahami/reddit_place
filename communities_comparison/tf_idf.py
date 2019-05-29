@@ -83,8 +83,7 @@ def calc_tf_idf(model, m_f_name, idf):
         pickle.dump(tf_idf, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def calc_tf_idf_all_models(m_type):
-    m_names = get_models_names(path=c.data_path, m_type=m_type)
+def calc_tf_idf_all_models(m_names, m_type):
     print("calc idf")
     idf = calc_idf(m_names=m_names, m_type=m_type, calc=True)
     print("calc tf-idf")
