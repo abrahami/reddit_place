@@ -9,6 +9,11 @@ from gensim.models.keyedvectors import WordEmbeddingSimilarityIndex
 import pandas as pd
 from scipy.spatial.distance import pdist, squareform
 from operator import itemgetter
+import pickle
+if p.system() == 'Windows':
+    from communities_comparison.visualization import tsne_plot
+else:
+    from visualization import tsne_plot
 np.random.seed(c.SEED)
 
 
@@ -25,30 +30,52 @@ def calc_vec_distances(vectors_matrix, metric, square_form=False):
     return pdist(X=vectors_matrix, metric=metric)
 
 
-def get_normalized_weights(w_dict, keys_lst):
+def get_inter_weights(w_dict, keys_lst, normalize):
     v = np.array(itemgetter(*keys_lst)(w_dict))
-    # todo- consider to remove normalization and use it later
-    return v/v.sum()
+    if normalize:
+        return v/v.sum()
+    return v
 
 
-def get_pairs_weights(arr):
+def calc_pairwise_weights(arr, normalize, calc=False):
     """
 
-    :param arr: Numpy array. array of positive weights, sum(arr) = 1.
-    :return: condensed matrix of mean weight for each two elements in arr
+    :param arr: Numpy array. array of positive weights.
+    :param normalize: whether to normalize the weights vector.
+    :param calc: Boolean.
+    :return: condensed matrix of max weight for each two elements in arr.
     """
-    # todo- should be implemented more efficiently
-    # n(n-1)/2
-    n = len(arr)
-    con_w = np.empty(int(n*(n-1)/2))
-    idx = 0
-    for i in range(0, len(arr)):
-        for j in range(i+1, len(arr)):
-            con_w[idx] = np.mean((arr[i], arr[j]))
-            idx += 1
-    # todo- consider to add normalization/ used other method for weighting
-    return con_w/con_w.sum()
-    # return con_w
+    if calc:
+        n = len(arr)
+        N = n * (n - 1) // 2
+        idx = np.concatenate(([0], np.arange(n - 1, 0, -1).cumsum()))
+        start, stop = idx[:-1], idx[1:]
+        pairs_w = np.empty(N, dtype=float)
+        for j, i in enumerate(range(n - 1)):
+            s0, s1 = start[j], stop[j]
+            curr = np.array([np.repeat(arr[i], len(arr[i + 1:])), np.array(arr[i + 1:])])
+            pairs_w[s0:s1] = np.amax(curr, axis=0)
+        with open(join(c.data_path, 'pairs_w' + '.pickle'), 'wb') as handle:
+            pickle.dump(pairs_w, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    else:
+        with open(join(c.data_path, 'pairs_w' + '.pickle'), 'rb') as handle:
+            pairs_w = pickle.load(handle)
+
+    if normalize:
+        return pairs_w/pairs_w.sum()
+    return pairs_w
+
+
+def select_top_weights(arr, top_perc):
+    """
+
+    :param arr: Numpy array- original weights.
+    :param top_perc: Int - the percentage of top (highest) weights to keep.
+    :return: Numpy array- new weights after selecting top.
+    """
+    min_thres = np.percentile(a, 100-top_perc)
+    arr_t = np.where(arr < min_thres, 0, arr)
+    return arr_t/arr_t.sum()
 
 
 def calc_distance_between_comm(d1, d2, w):
@@ -59,7 +86,7 @@ def calc_distance_between_comm(d1, d2, w):
     :param w: condensed matrix of weights for pairs of intersection words
     Note: words' order should be identical in d1, d2, w
 
-    :return: int - distance between community 1 and 2 = weighted average of absolute difference between intersection words
+    :return: float [0, 2] - distance between community 1 and 2 = weighted average of absolute difference between intersection words
     """
     abs_d = abs(d1 - d2)
     return np.matmul(abs_d, w.T)
@@ -84,50 +111,50 @@ def compare(model_1, model_2, weights_1, weights_2):
 
     # 4- calc weights for intersection words
     print("\ncalc weights")
-    # get normalized weights of intersection words per community
-    w_1 = get_normalized_weights(w_dict=weights_1, keys_lst=list(intersec))  # scale (0,1), sum=1
-    w_2 = get_normalized_weights(w_dict=weights_2, keys_lst=list(intersec))  # scale (0,1), sum=1
-    # weight per word in intersection (mean)
-    w_intersec = (w_1 + w_2)/2  # scale (0,1), sum=1
-    # weight per pair of words in intersection
-    w_pairs = get_pairs_weights(arr=w_intersec)
+    # get weights of intersection words per community
+    w_1 = get_inter_weights(w_dict=weights_1, keys_lst=list(intersec), normalize=False)
+    w_2 = get_inter_weights(w_dict=weights_2, keys_lst=list(intersec), normalize=False)
+    # weight per word in intersection (max)
+    w_intersec = np.amax(np.array([w_1, w_2]), axis=0)
+    # max weight per pair of words in intersection
+    w_pairs = calc_pairwise_weights(arr=w_intersec, normalize=True, calc=True)
     print(f"sum of w_pairs: {sum(w_pairs)}")
 
-    # 5- compare communities
+    # 5- select top weights
+    w_pairs = select_top_weights(arr=w_pairs, top_perc=25)
+    print(f"sum of w_pairs_t: {sum(w_pairs)}")
+
+    # 6- compare communities
     print("\ncompare communities")
-    # ans = calc_distance_between_comm(d1=dis_1, d2=dis_2, w=np.ones(len(dis_1)))
-    ans = calc_distance_between_comm(d1=dis_1, d2=dis_2, w=w_pairs)
+    ans = calc_distance_between_comm(d1=dis_1, d2=dis_2, w=w_pairs)  # w=np.ones(len(dis_1))
     print(f"score: {ans}")
+
+    # 6- visualization
+    df_1 = pd.DataFrame()
+    df_1['weight'] = w_1
+    df_1['word'] = intersec
+    df_1 = df_1.sort_values(by=['weight'], ascending=False).reset_index(drop=True)
+    # tsnescatterplot(model_1, df_1['word'][0], list(df_1['word'][1:10]))
 
     # todo- should consider also the size of intersection.
     #  possible formula: len(intersection)/len(union) * ans (?)
 
 
-model_gameswap = Word2Vec.load(join(c.home_path, 'gameswap_model_1.01' + '.model'))
-model_babymetal = Word2Vec.load(join(c.home_path, 'babymetal_model_1.01' + '.model'))
+model_gameswap = Word2Vec.load(join(c.data_path, 'gameswap_model_1.01' + '.model'))
+model_babymetal = Word2Vec.load(join(c.data_path, 'babymetal_model_1.01' + '.model'))
 # temp - should be provided
 weights_gameswap = generate_weights(model=model_gameswap)
 weights_babymetal = generate_weights(model=model_babymetal)
 
-# wv_babymetal = model_babymetal.wv
-# #
-# idx = [
-#     7, 8, 12, 17, 52, 86, 98, 111, 117,
-#     # numbers
-#     140, 160, 179, 182, 217, 251, 261, 287, 386, 391, 459, 484, 511, 519, 523, 528, 609, 619,
-#     # smilies
-#     304, 320, 336, 526, 577,
-#     # other symbols
-#     390, 395, 712, 646, 948,
-#     # a single character/ suffix
-#     479, 504, 535, 545, 744, 587, 506, 517]
+wv_babymetal = model_babymetal.wv
 #
-# wrong_strings = [wv_babymetal.index2entity[i] for i in idx]
-
-# dis_gameswap = wv_gameswap.distances('the', other_words=list(intersection))
-
-# todo- two elements to consider when comparing communities:
-#  1 - size of intersection
-#  2 - similarity based on intersection
-compare(model_1=model_gameswap, model_2=model_babymetal,
-        weights_1=weights_gameswap, weights_2=weights_babymetal)
+idx = [
+    7, 8, 12, 17, 52, 86, 98, 111, 117,
+    # numbers
+    140, 160, 179, 182, 217, 251, 261, 287, 386, 391, 459, 484, 511, 519, 523, 528, 609, 619,
+    # smilies
+    304, 320, 336, 526, 577,
+    # other symbols
+    390, 395, 712, 646, 948,
+    # a single character/ suffix
+    479, 504, 535, 545, 744, 587, 506, 517]

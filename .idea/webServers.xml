@@ -2,12 +2,20 @@
 <project version="4">
   <component name="WebServers">
     <option name="servers">
-      <webServer id="d8063860-2e88-4d12-bfc0-a9920709647a" name="rna_server" url="http:///">
-        <fileTransfer host="132.72.67.169" port="22" accessType="SFTP">
+      <webServer id="6e551704-76c7-465c-b2a9-7ccd6508ac00" name="nlp_server" url="http:///">
+        <fileTransfer host="132.72.23.28" port="48881" privateKey="C:\Users\ssarusi\.ssh\id_rsa.ppk" accessType="SFTP" keyPair="true">
           <advancedOptions>
             <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
           </advancedOptions>
-          <option name="port" value="22" />
+          <option name="port" value="48881" />
+        </fileTransfer>
+      </webServer>
+      <webServer id="228d082a-151d-4eec-a816-393505925a0d" name="localhost" url="http://localhost">
+        <fileTransfer host="localhost" port="6000" privateKey="C:\Users\ssarusi\.ssh\id_rsa.ppk" accessType="SFTP" keyPair="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+          <option name="port" value="6000" />
         </fileTransfer>
       </webServer>
     </option>

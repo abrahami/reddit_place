@@ -5,10 +5,17 @@ import platform as p
 # region Params PATH
 if p.system() == 'Windows':
     if 'ssarusi' in getcwd():
-        home_path = join('C:', sep, 'Users', 'ssarusi', 'Desktop', 'second_degree', 'semester_d', 'NLP')
+        data_path = join('C:', sep, 'Users', 'ssarusi', 'Desktop', 'second_degree', 'semester_d', 'NLP')
+        tf_idf_path = join('C:', sep, 'Users', 'ssarusi', 'Desktop', 'second_degree', 'semester_d', 'NLP', 'tf_idf')
 else:
-    home_path = join('C:', sep, 'home', 'local', 'BGU-USERS', 'shanisa', 'NLP')
+    data_path = join('C:', sep, 'data', 'home', 'orentsur', 'data', 'reddit_place', 'embedding', 'embedding_per_sr')
+    tf_idf_path = join('C:', sep, 'data', 'home', 'shanisa')
+
 # endregion
 
-SEED = 7
+CALC_TF_IDF = True
+CALC_SCORES = True
 
+SEED = 7
+MODEL_TYPE = '1'  # Word2Vec
+# MODEL_TYPE = '2'  # Word2Vec
