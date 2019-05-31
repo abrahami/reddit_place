@@ -24,7 +24,8 @@ def load_model(path, m_type, name):
 
 
 def load_tfidf(path, name):
-    f_name = 'tf_idf_' + name
+    f_name = 'tf_idf_' + name.replace('_1', '_2')
     with open(join(path, f_name + '.pickle'), 'rb') as handle:
         tfidf = pickle.load(handle)
     return tfidf
+

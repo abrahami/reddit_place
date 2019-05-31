@@ -24,13 +24,28 @@ def generate_weights(model):
     return dict(zip(words, weights))
 
 
-def calc_vec_distances(vectors_matrix, metric, square_form=False):
-    if square_form:
-        return squareform(X=pdist(X=vectors_matrix, metric=metric))
-    return pdist(X=vectors_matrix, metric=metric)
+def calc_vec_distances(name, vectors_matrix, metric):
+    """
+
+    :param name: String. file name for distances matrix
+    :param vectors_matrix: Numpy array. he vectors to calc distances between them
+    :param metric: String. distance metric.
+    :return: Numpy array - distances matrix.
+    """
+    if c.CALC_DIS:
+        dis_matrix = pdist(X=vectors_matrix, metric=metric)
+        with open(join(c.dis_path, name + '.pickle'), 'wb') as handle:
+            pickle.dump(dis_matrix, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    else:
+        with open(join(c.dis_path, name + '.pickle'), 'rb') as handle:
+            dis_matrix = pickle.load(handle)
+    return dis_matrix
 
 
-def get_inter_weights(w_dict, keys_lst, normalize):
+def get_selected_weights(w_dict, keys_lst, normalize):
+    if c.METHOD == 'union':
+        new_w = np.setdiff1d(keys_lst, np.array(list(w_dict.keys())), assume_unique=True)
+        w_dict.update(dict(zip(new_w, np.zeros(len(new_w)))))  # add new words to dict with weight=0
     v = np.array(itemgetter(*keys_lst)(w_dict))
     if normalize:
         return v/v.sum()
@@ -67,7 +82,7 @@ def calc_pairwise_weights(arr, f_name, normalize, calc=False):
     return pairs_w
 
 
-def select_top_weights(arr, top_perc):
+def keep_top_weights(arr, top_perc):
     """
 
     :param arr: Numpy array- original weights.
@@ -102,54 +117,74 @@ def compare(n_model_1, n_model_2, weights_1, weights_2):
     :param weights_2: Dict. weight for each word in model 2 vocab.
     :return:
     """
-    start = time.time()
     model_1 = load_model(path=c.data_path, m_type=c.MODEL_TYPE, name=n_model_1)
     model_2 = load_model(path=c.data_path, m_type=c.MODEL_TYPE, name=n_model_2)
 
     # 1- word vectors
     wv_1, wv_2 = model_1.wv, model_2.wv
 
-    # 2- intersection
+    # 2- intersection and union
     intersec = np.intersect1d(wv_1.index2entity, wv_2.index2entity)
     wc1, wc2, wc_inter = len(wv_1.index2entity), len(wv_2.index2entity), len(intersec)
-    wv_1_inter, wv_2_inter = wv_1[list(intersec)], wv_2[list(intersec)]
+    if c.METHOD == 'intersection':
+        w_lst = list(intersec)
+    elif c.METHOD == 'union':
+        union = np.union1d(wv_1.index2entity, wv_2.index2entity)
+        inter_idx = np.in1d(union, intersec)
+        w_lst = list(union)
+    wv_1_selected, wv_2_selected = wv_1[w_lst], wv_2[w_lst]
 
     # 3- calc vectors distances
-    print("\ncalc distances")
+    print("calc distances")
+    start = time.time()
     dis_metric = 'cosine'
-    dis_1 = calc_vec_distances(vectors_matrix=wv_1_inter, metric=dis_metric)
-    dis_2 = calc_vec_distances(vectors_matrix=wv_2_inter, metric=dis_metric)
+    name_1 = n_model_1 + '_' + c.METHOD + '_' + n_model_2
+    name_2 = n_model_2 + '_' + c.METHOD + '_' + n_model_1
+    dis_1 = calc_vec_distances(name=name_1, vectors_matrix=wv_1_selected, metric=dis_metric)
+    dis_2 = calc_vec_distances(name=name_2, vectors_matrix=wv_2_selected, metric=dis_metric)
+    print(f"elapsed time (min): {(time.time()-start)/60}")
+
+    # 3.1 - find indexes of intersection
+    # union = np.union1d(wv_1.index2entity, wv_2.index2entity)
+    # inter_idx = np.in1d(union, intersec)
+    # inter_dis_idx = pdist(X=inter_idx.reshape(-1, 1), metric=lambda u, v: np.logical_and(u, v))
+    # dis_1, dis_2 = dis_1[inter_dis_idx], dis_2[inter_dis_idx]
 
     # 4- calc weights for intersection words
-    print("\ncalc weights")
-    # get weights of intersection words per community
-    w_1 = get_inter_weights(w_dict=weights_1, keys_lst=list(intersec), normalize=False)
-    w_2 = get_inter_weights(w_dict=weights_2, keys_lst=list(intersec), normalize=False)
-    # weight per word in intersection (max)
-    w_intersec = np.amax(np.array([w_1, w_2]), axis=0)
-    # weight per pair of words in intersection (max of the 2 elements in pair)
+    print("calc weights")
+    start = time.time()
+    # get weights of selected words per community
+    w_1 = get_selected_weights(w_dict=weights_1, keys_lst=w_lst, normalize=False)
+    w_2 = get_selected_weights(w_dict=weights_2, keys_lst=w_lst, normalize=False)
+    # weight per word (max)
+    w_max = np.amax(np.array([w_1, w_2]), axis=0)
+    # weight per pair of words (max of the 2 elements in pair)
     f_name = 'pair_w_' + n_model_1 + '_' + n_model_2
-    w_pairs = calc_pairwise_weights(arr=w_intersec, normalize=False, calc=True)
+    w_pairs = calc_pairwise_weights(arr=w_max, f_name=f_name, normalize=False, calc=True)
 
-    # 5- select top weights + normalize
-    w_pairs = select_top_weights(arr=w_pairs, top_perc=25)
+    # 5- keep top weights + normalize
+    w_pairs = keep_top_weights(arr=w_pairs, top_perc=25)
     print(f"sum of top w_pairs: {sum(w_pairs)}")
+    print(f"elapsed time (min): {(time.time()-start)/60}")
 
     # 6- compare communities
-    print("\ncompare communities")
+    print("compare communities")
     score = calc_distance_between_comm(d1=dis_1, d2=dis_2, w=w_pairs)  # w=np.ones(len(dis_1))
-    print(f"")
     return score, wc1, wc2, wc_inter
 
 
 def calc_scores_all_models(m_names, m_type):
     metrics = pd.DataFrame(columns=['name_m1', 'name_m2', 'score', 'wc_m1', 'wc_m2', 'wc_inter'])
-    for (m1, m2) in combinations(iterable=m_names, r=2):
+    tot_i = int(len(m_names)*(len(m_names)-1)/2)
+    for i, (m1, m2) in enumerate(combinations(iterable=m_names, r=2)):
+        print(f"###### iteration {i+1} out of {tot_i}")
+        start_c = time.time()
         tfidf_1 = load_tfidf(path=c.tf_idf_path, name=m1)
         tfidf_2 = load_tfidf(path=c.tf_idf_path, name=m2)
         score, wc1, wc2, wc_inter = compare(n_model_1=m1, n_model_2=m2, weights_1=tfidf_1, weights_2=tfidf_2)
         res = {'name_m1': m1, 'name_m2': m2, 'score': score, 'wc_m1': wc1, 'wc_m2': wc2, 'wc_inter': wc_inter}
         metrics = metrics.append(res, ignore_index=True)
+        print(f"compare {m1} {m2}, score: {score} - elapsed time (min): {(time.time()-start_c)/60}")
 
     metrics_f_name = 'metrics_m_type_' + m_type
     with open(join(c.scores_path, metrics_f_name + '.pickle'), 'wb') as handle:
@@ -162,9 +197,5 @@ def calc_scores_all_models(m_names, m_type):
 # df_1['word'] = intersec
 # df_1 = df_1.sort_values(by=['weight'], ascending=False).reset_index(drop=True)
 # # tsnescatterplot(model_1, df_1['word'][0], list(df_1['word'][1:10]))
-
-# todo- should consider also the size of intersection.
-#  possible formula: len(intersection)/len(union) * ans (?)
-
 
 # weights_gameswap = generate_weights(model=model_gameswap)
