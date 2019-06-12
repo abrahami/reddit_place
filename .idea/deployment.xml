@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="shanisa@localhost:6000">
+  <component name="PublishConfigData" autoUpload="Always" serverName="shanisa@localhost:7000">
     <serverData>
       <paths name="localhost">
         <serverdata>
@@ -20,6 +20,13 @@
         <serverdata>
           <mappings>
             <mapping deploy="/home/shanisa/reddit_place" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="shanisa@localhost:7000">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/tmp/pycharm_project_999" local="$PROJECT_DIR$" />
           </mappings>
         </serverdata>
       </paths>

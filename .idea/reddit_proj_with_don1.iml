@@ -7,7 +7,7 @@
       <sourceFolder url="file://$MODULE_DIR$/reddit-tools" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$" isTestSource="false" />
     </content>
-    <orderEntry type="jdk" jdkName="Remote Python 3.7.0 (sftp://shanisa@localhost:6000/home/shanisa/anaconda3/bin/python3)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Remote Python 3.7.0 (sftp://shanisa@localhost:7000/home/shanisa/anaconda3/bin/python3)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="PyDocumentationSettings">

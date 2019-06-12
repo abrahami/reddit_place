@@ -5,6 +5,7 @@ from communities_comparison.utils import get_models_names, load_model
 import config as c
 import pickle
 import math
+import multiprocessing as mp
 
 
 def add_w_count(model, all_wc):
@@ -54,8 +55,8 @@ def calc_idf(m_names, m_type, calc):
         # total_wc = dict()  # word counts in all communities
         total_wdc = dict()  # document-word count in all documents (communities)
         for i, m_name in enumerate(m_names):
-            if i % 100 == 0:
-                print(f" i: {i}, model name: {m_name}")
+            if i % 50 == 0:
+                print(f" i: {i}")
             curr_model = load_model(path=c.data_path, m_type=m_type, name=m_name)
             # total_wc = add_w_count(model=curr_model, all_wc=total_wc)
             n_wc = 'wc_' + m_name
@@ -73,34 +74,62 @@ def calc_idf(m_names, m_type, calc):
     return idf
 
 
-def calc_tf_idf(wc, m_f_name, idf):
+# def calc_tf_idf(wc, m_f_name, idf):
+#     """
+#
+#     :param wc: Dict. words count of the model to calc its tf-idf.
+#     :param m_f_name: String. name for saving model's tf-idf file.
+#     :param idf: Dict. idf score for each word in the corpus (words from all communities).
+#     :return: None.  save 'tf-idf' vector per community.
+#     """
+#     # tf (term frequency):  tf(t,d)= f[t,d] (the raw count of term t in document d)
+#     # tf_idf(t,d,D) = tf(t,d) * idf(t,D)
+#
+#     tf_idf = {k: v * idf.get(k) for (k, v) in wc.items()}
+#     with open(join(c.tf_idf_path, m_f_name + '.pickle'), 'wb') as handle:
+#         pickle.dump(tf_idf, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def calc_tf_idf(m_name, idf):
     """
 
-    :param wc: Dict. words count of the model to calc its tf-idf.
-    :param m_f_name: String. name for saving model's tf-idf file.
+    :param m_name: String. model's name.
     :param idf: Dict. idf score for each word in the corpus (words from all communities).
     :return: None.  save 'tf-idf' vector per community.
     """
     # tf (term frequency):  tf(t,d)= f[t,d] (the raw count of term t in document d)
     # tf_idf(t,d,D) = tf(t,d) * idf(t,D)
 
+    wc_f_name = 'wc_' + m_name
+    with open(join(c.tf_idf_path, wc_f_name + '.pickle'), 'rb') as handle:
+        wc = pickle.load(handle)
+
     tf_idf = {k: v * idf.get(k) for (k, v) in wc.items()}
+    m_f_name = 'tf_idf_' + m_name
     with open(join(c.tf_idf_path, m_f_name + '.pickle'), 'wb') as handle:
         pickle.dump(tf_idf, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def calc_tf_idf_all_models(m_names, m_type):
     print("calc idf")
-    idf = calc_idf(m_names=m_names, m_type=m_type, calc=True)
+    idf = calc_idf(m_names=m_names, m_type=m_type, calc=False)
+    lst = []
+    for m in m_names:
+        lst = lst + [(m, idf)]
     print("calc tf-idf")
-    for i, m_name in enumerate(m_names):
-        if i % 100 == 0:
-            print(f" i: {i}, model name: {m_name}")
-        wc_f_name = 'wc_' + m_name
-        with open(join(c.tf_idf_path, wc_f_name + '.pickle'), 'rb') as handle:
-            wc = pickle.load(handle)
-        m_f_name = 'tf_idf_' + m_name
-        calc_tf_idf(wc=wc, m_f_name=m_f_name, idf=idf)
+    processes_amount = c.CPU_COUNT
+    pool = mp.Pool(processes=processes_amount)
+    with pool as pool:
+        pool.starmap(calc_tf_idf, lst)
+
+    # for i, m_name in enumerate(m_names):
+    #     if i % 100 == 0:
+    #         print(f" i: {i}, model name: {m_name}")
+    #     wc_f_name = 'wc_' + m_name
+    #     with open(join(c.tf_idf_path, wc_f_name + '.pickle'), 'rb') as handle:
+    #         wc = pickle.load(handle)
+    #     m_f_name = 'tf_idf_' + m_name
+    #     calc_tf_idf(wc=wc, m_f_name=m_f_name, idf=idf)
     return
 
 
