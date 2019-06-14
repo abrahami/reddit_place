@@ -6,6 +6,9 @@ import config as c
 import pickle
 import math
 import multiprocessing as mp
+import numpy as np
+import pandas as pd
+from IPython.display import display
 
 
 def add_w_count(model, all_wc):
@@ -41,24 +44,21 @@ def add_wd_count(model, all_wdc, n_wc):
     return all_wdc
 
 
-def calc_idf(m_names, m_type, calc):
+def calc_idf(m_names, m_type):
     """
 
     :param m_names: List. names of the models to load.
-    :param m_type: string. model type ('1', '2').
-    :param calc: boolean. whether to calculate the total count.
+    :param m_type: string. model type ('2.01', '2.02', '2.03').
     :return: Dict. idf score for each word in the corpus (words from all communities).
     """
     idf_name = 'idf_dict_m_type_' + m_type
-    if calc:
+    if c.CALC_IDF:
         N = len(m_names)
-        # total_wc = dict()  # word counts in all communities
         total_wdc = dict()  # document-word count in all documents (communities)
         for i, m_name in enumerate(m_names):
             if i % 50 == 0:
                 print(f" i: {i}")
             curr_model = load_model(path=c.data_path, m_type=m_type, name=m_name)
-            # total_wc = add_w_count(model=curr_model, all_wc=total_wc)
             n_wc = 'wc_' + m_name
             total_wdc = add_wd_count(model=curr_model, all_wdc=total_wdc, n_wc=n_wc)  # save dict of wc
 
@@ -112,13 +112,12 @@ def calc_tf_idf(m_name, idf):
 
 def calc_tf_idf_all_models(m_names, m_type):
     print("calc idf")
-    idf = calc_idf(m_names=m_names, m_type=m_type, calc=False)
+    idf = calc_idf(m_names=m_names, m_type=m_type)
     lst = []
     for m in m_names:
         lst = lst + [(m, idf)]
     print("calc tf-idf")
-    processes_amount = c.CPU_COUNT
-    pool = mp.Pool(processes=processes_amount)
+    pool = mp.Pool(processes=c.CPU_COUNT)
     with pool as pool:
         pool.starmap(calc_tf_idf, lst)
 
@@ -131,6 +130,47 @@ def calc_tf_idf_all_models(m_names, m_type):
     #     m_f_name = 'tf_idf_' + m_name
     #     calc_tf_idf(wc=wc, m_f_name=m_f_name, idf=idf)
     return
+
+
+def get_vocab_length(m_name, m_type):
+    model = load_model(path=c.data_path, m_type=m_type, name=m_name)
+    res = {'m_name': m_name, 'vocab_length': len(model.wv.index2entity)}
+    return res
+
+
+def calc_vocab_distribution(m_names):
+    vd_name = 'vocab_length_distribution'
+
+    if c.CALC_VOCAB_DISTR:
+        vocab_d = pd.DataFrame(columns=['m_name', 'vocab_length'])
+        lst = []
+        for m in m_names:
+            lst = lst + [(m, c.MODEL_TYPE)]
+        print("calc vocab distribution")
+        pool = mp.Pool(processes=c.CPU_COUNT)
+        with pool as pool:
+            results = pool.starmap(get_vocab_length, lst)
+
+        for res in results:
+            vocab_d = vocab_d.append(res, ignore_index=True)
+
+        p_lst = list(range(0, 100, 5))
+        df = pd.DataFrame(data={'percentile': p_lst, 'vocab_length': np.percentile(a=vocab_d['vocab_length'], q=p_lst)})
+        display(df)
+
+        with open(join(c.vocab_distr_path, vd_name + '.pickle'), 'wb') as handle:
+            pickle.dump(vocab_d, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    else:
+        with open(join(c.vocab_distr_path, vd_name + '.pickle'), 'rb') as handle:
+            vocab_d = pickle.load(handle)
+
+    # keep only models with vocab length above threshold (a certain percentile from distribution)
+    min_vocab_length = np.percentile(a=vocab_d['vocab_length'], q=c.VOCAB_PERC_THRES)
+    valid_vocab_d = vocab_d[vocab_d['vocab_length'] > min_vocab_length]
+    return valid_vocab_d['m_name']
+
+
+
 
 
 

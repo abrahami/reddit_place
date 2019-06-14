@@ -1,5 +1,4 @@
 import platform as p
-print(f"\nCurrent platform: {p.platform()}")
 # if p.system() == 'Windows':
 import config as c
 from communities_comparison.utils import load_model, load_tfidf
@@ -178,8 +177,7 @@ def calc_scores_all_models(m_names, m_type):
     lst = []
     for i, (m1, m2) in enumerate(combinations(iterable=m_names, r=2)):
         lst = lst + [(i+1, m1, m2)]
-    processes_amount = c.CPU_COUNT
-    pool = mp.Pool(processes=processes_amount)
+    pool = mp.Pool(processes=c.CPU_COUNT)
     with pool as pool:
         results = pool.starmap(compare, lst)
 
