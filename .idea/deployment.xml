@@ -19,14 +19,14 @@
       <paths name="shanisa@localhost:6000">
         <serverdata>
           <mappings>
-            <mapping deploy="/home/shanisa/reddit_place" local="$PROJECT_DIR$" />
+            <mapping deploy="/home/shanisa/reddit_place" local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
       <paths name="shanisa@localhost:7000">
         <serverdata>
           <mappings>
-            <mapping deploy="/tmp/pycharm_project_999" local="$PROJECT_DIR$" />
+            <mapping deploy="/home/shanisa/reddit_place" local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>

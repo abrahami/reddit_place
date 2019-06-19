@@ -110,3 +110,4 @@ def tsnescatterplot(model, word, list_names):
 
     plt.title('t-SNE visualization for {}'.format(word.title()))
     plt.show()
+

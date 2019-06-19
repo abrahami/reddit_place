@@ -35,11 +35,12 @@ def calc_vec_distances(name, vectors_matrix, metric):
     """
     if c.CALC_DIS:
         dis_matrix = pdist(X=vectors_matrix, metric=metric)
-        with open(join(c.dis_path, name + '.pickle'), 'wb') as handle:
-            pickle.dump(dis_matrix, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    else:
-        with open(join(c.dis_path, name + '.pickle'), 'rb') as handle:
-            dis_matrix = pickle.load(handle)
+        if c.SAVE_DIS_MATRIX:
+            with open(join(c.dis_path, name + '.pickle'), 'wb') as handle:
+                pickle.dump(dis_matrix, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    # else:
+    #     with open(join(c.dis_path, name + '.pickle'), 'rb') as handle:
+    #         dis_matrix = pickle.load(handle)
     return dis_matrix
 
 
@@ -72,11 +73,11 @@ def calc_pairwise_weights(arr, f_name, normalize, calc=False):
             s0, s1 = start[j], stop[j]
             curr = np.array([np.repeat(arr[i], len(arr[i + 1:])), np.array(arr[i + 1:])])
             pairs_w[s0:s1] = np.amax(curr, axis=0)
-        with open(join(c.tf_idf_path, f_name + '.pickle'), 'wb') as handle:
-            pickle.dump(pairs_w, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    else:
-        with open(join(c.tf_idf_path, f_name + '.pickle'), 'rb') as handle:
-            pairs_w = pickle.load(handle)
+    #     with open(join(c.tf_idf_path, f_name + '.pickle'), 'wb') as handle:
+    #         pickle.dump(pairs_w, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    # else:
+    #     with open(join(c.tf_idf_path, f_name + '.pickle'), 'rb') as handle:
+    #         pairs_w = pickle.load(handle)
 
     if normalize:
         return pairs_w/pairs_w.sum()
@@ -133,7 +134,7 @@ def compare(i, n_model_1, n_model_2):
         w_lst = list(intersec)
     elif c.METHOD == 'union':
         union = np.union1d(wv_1.index2entity, wv_2.index2entity)
-        inter_idx = np.in1d(union, intersec)
+        # inter_idx = np.in1d(union, intersec)
         w_lst = list(union)
     wv_1_selected, wv_2_selected = wv_1[w_lst], wv_2[w_lst]
 
@@ -187,3 +188,6 @@ def calc_scores_all_models(m_names, m_type):
     with open(join(c.scores_path, metrics_f_name + '.pickle'), 'wb') as handle:
         pickle.dump(metrics, handle, protocol=pickle.HIGHEST_PROTOCOL)
     metrics.to_csv(join(c.scores_path, metrics_f_name + '.csv'), index=False)
+
+
+

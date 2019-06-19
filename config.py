@@ -5,7 +5,7 @@ import platform as p
 
 
 MODEL_TYPE = '2.02'
-N = 200
+N = 500
 VOCAB_PERC_THRES = 20
 # Word2Vec
 METHOD = 'intersection'
@@ -29,12 +29,15 @@ else:
     tf_idf_path = join('C:', sep, 'data', 'home', 'shanisa', 'project_data', 'tf_idf', MODEL_TYPE, 'N_' + str(N))
     scores_path = join('C:', sep, 'data', 'home', 'shanisa', 'project_data', 'scores', MODEL_TYPE, 'N_' + str(N))
     dis_path = join('C:', sep, 'data', 'home', 'shanisa', 'project_data', 'distances', MODEL_TYPE, 'N_' + str(N))
-    for p in [tf_idf_path, scores_path, dis_path]:
+    for p in [vocab_distr_path, tf_idf_path, scores_path, dis_path]:
         if not os.path.exists(p):
             os.makedirs(p)
 # endregion
 
+# AD_HOC_NAMES = ['worldevents_model_2.02.model', 'usanews_model_2.02.model', 'buildapcforme_model_2.02.model',
+#                 'shacomains_model_2.02.model']
+AD_HOC_NAMES = None
 APPLY_VOCAB_THRES, CALC_VOCAB_DISTR = True, False
 CALC_TF_IDF, CALC_IDF = True, True
-CALC_SCORES, CALC_DIS = True, True
+CALC_SCORES, CALC_DIS, SAVE_DIS_MATRIX = True, True, False
 

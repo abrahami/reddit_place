@@ -27,3 +27,4 @@ def load_tfidf(path, name):
         tfidf = pickle.load(handle)
     return tfidf
 
+

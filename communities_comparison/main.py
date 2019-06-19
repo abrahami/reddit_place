@@ -27,11 +27,15 @@ if __name__ == "__main__":
     print(f"VOCAB_PERC_THRES = {c.VOCAB_PERC_THRES}")
     print(f"COMMUNITIES TO COMPARE = {c.N}")
     print(f"METHOD = {c.METHOD}")
-    m_names = get_models_names(path=c.data_path, m_type=c.MODEL_TYPE)
-    # m_names = sorted(m_names)[:c.N]
-    if c.APPLY_VOCAB_THRES:
-        valid_m_names = calc_vocab_distribution(m_names=m_names)
-    valid_m_names = rn.sample(list(valid_m_names), c.N)
+    if c.AD_HOC_NAMES:
+        print(f"AD_HOC_NAMES = {c.AD_HOC_NAMES}")
+        valid_m_names = c.AD_HOC_NAMES
+    else:
+        m_names = get_models_names(path=c.data_path, m_type=c.MODEL_TYPE)
+        # m_names = sorted(m_names)[:c.N]
+        if c.APPLY_VOCAB_THRES:
+            valid_m_names = calc_vocab_distribution(m_names=m_names)
+        valid_m_names = rn.sample(list(valid_m_names), c.N)
 
     print(f"\n1 - CALC_TF_IDF -> {c.CALC_TF_IDF}")
     start_1 = time.time()
@@ -40,6 +44,7 @@ if __name__ == "__main__":
     print(f"CALC_TF_IDF - elapsed time (min): {(time.time()-start_1)/60}")
 
     print(f"\n2 - CALC_SCORES -> {c.CALC_SCORES}")
+    print(f"2.1 - SAVE_DIS_MATRIX -> {c.SAVE_DIS_MATRIX}")
     start_2 = time.time()
     if c.CALC_SCORES:
         calc_scores_all_models(m_names=valid_m_names, m_type=c.MODEL_TYPE)
@@ -49,4 +54,5 @@ if __name__ == "__main__":
             metrics = pickle.load(handle)
         metrics.to_csv(join(c.scores_path, metrics_f_name + '.csv'))
     print(f"CALC_SCORES - elapsed time (min): {(time.time()-start_2)/60}")
+
 
