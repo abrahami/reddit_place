@@ -184,6 +184,8 @@ def calc_scores_all_models(m_names, m_type):
 
     for res in results:
         metrics = metrics.append(res, ignore_index=True)
+    for col in ['name_m1', 'name_m2']:
+        metrics[col] = metrics[col].apply(lambda x: x.replace('_model_' + c.MODEL_TYPE + '.model', ''))
     metrics_f_name = 'metrics_m_type_' + m_type + '_' + dt.datetime.now().strftime("%Y_%m_%d")
     with open(join(c.scores_path, metrics_f_name + '.pickle'), 'wb') as handle:
         pickle.dump(metrics, handle, protocol=pickle.HIGHEST_PROTOCOL)

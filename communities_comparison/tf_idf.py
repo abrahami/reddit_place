@@ -166,7 +166,9 @@ def calc_vocab_distribution(m_names):
 
     # keep only models with vocab length above threshold (a certain percentile from distribution)
     min_vocab_length = np.percentile(a=vocab_d['vocab_length'], q=c.VOCAB_PERC_THRES)
-    valid_vocab_d = vocab_d[vocab_d['vocab_length'] > min_vocab_length]
+    valid_vocab_d = vocab_d[vocab_d['vocab_length'] > min_vocab_length].reset_index(drop=True)
+    valid_vocab_d['m_name'] = valid_vocab_d['m_name'].apply(lambda x: x.replace('_model_' + c.MODEL_TYPE + '.model', ''))
+    valid_vocab_d.to_csv(join(c.vocab_distr_path, 'topic_clustering' + '.csv'))
     return valid_vocab_d['m_name']
 
 
