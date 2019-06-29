@@ -3,8 +3,8 @@ from os import getcwd
 import os
 import platform as p
 
-# LABELS_VERSION = 'V1'
-LABELS_VERSION = 'V2'
+
+LABELS_VERSION = 'V3'
 MODEL_TYPE = '2.02'
 # MODEL_TYPE = '2.03'
 N = 1565
@@ -42,12 +42,14 @@ else:
             os.makedirs(p)
 # endregion
 
-# AD_HOC_NAMES = ['worldevents_model_2.02.model', 'usanews_model_2.02.model', 'buildapcforme_model_2.02.model',
-#                 'shacomains_model_2.02.model']
-AD_HOC_NAMES = None
+# AD_HOC_NAMES = ['patriots', 'greenbaypackers', 'womenfortrump']
+AD_HOC_NAMES = ['guitar', 'music', 'spongebob']
+# AD_HOC_NAMES = None
+
 APPLY_VOCAB_THRES, CALC_VOCAB_DISTR = False, False
 LOAD_VALID_NAMES = True
-CALC_COMBINATIONS, FILTER_PAIRS = False, False
-CALC_TF_IDF, CALC_IDF, USE_TF_IDF_2_02 = True, True, False
-CALC_SCORES, CALC_DIS, SAVE_DIS_MATRIX = True, True, False
+CALC_COMBINATIONS, FILTER_PAIRS = True, False
+CALC_TF_IDF, CALC_IDF, USE_TF_IDF_2_02 = False, False, False
+CALC_SCORES, CALC_DIS, SAVE_DIS_MATRIX = True, True, True
+# CALC_SCORES, CALC_DIS, SAVE_DIS_MATRIX = False, False, False
 

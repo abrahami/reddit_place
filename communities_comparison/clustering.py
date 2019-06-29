@@ -79,22 +79,26 @@ def get_cluster_members(df, sub_category, labels):
     return members
 
 
-def get_cluster_data(df, dis_col, sub_category, labels, only_clus_members):
+def get_cluster_data(df, dis_col, sub_category, labels, general_category, only_clus_members):
     '''
     
     :param df: DataFrame. final results for all subreddits.
     :param dis_col: String. the name of the distance column for sorting.
     :param sub_category: String. '1' or '2'.
     :param labels: List of strings. the labels representing the cluster.
+    :param general_category: The name of sub category '1' that includes the selected labels.
     :param only_clus_members: Boolean. whether to select pairs that are both belong to the cluster (AND).
-                              otherwise select pairs where at least one element belongs to the cluster (OR).
+                              otherwise select pairs where ONLY ONE element belongs to the cluster (OR).
     :return: DataFrame. results for selected cluster elements.
     '''
 
     cols = df.columns.values
     df['m1_in'] = df['sub_category_' + sub_category + '_m1'].apply(lambda x: x in labels)
     df['m2_in'] = df['sub_category_' + sub_category + '_m2'].apply(lambda x: x in labels)
-    df['select'] = df.m1_in & df.m2_in if only_clus_members else df.m1_in | df.m2_in
+    df['m1_in_general'] = df['sub_category_1_m1'].apply(lambda x: x in general_category)
+    df['m2_in_general'] = df['sub_category_1_m2'].apply(lambda x: x in general_category)
+    df['select'] = df.m1_in & df.m2_in if only_clus_members \
+        else (df.m1_in | df.m2_in) & np.logical_not(df.m1_in_general & df.m2_in_general)
     ans = df.loc[df['select'], cols].sort_values(by=[dis_col]).reset_index(drop=True)
 
     return ans

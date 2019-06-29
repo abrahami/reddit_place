@@ -1,3 +1,7 @@
+import sys
+if sys.platform == 'linux':
+    sys.path.append('/data/home/shanisa/reddit_place')
+print(f"\nCurrent platform: {sys.platform}")
 import config as c
 import pandas as pd
 from os.path import join
