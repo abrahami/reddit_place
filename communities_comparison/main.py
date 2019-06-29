@@ -9,7 +9,6 @@ print(f"\nCurrent platform: {sys.platform}")
 from communities_comparison.utils import get_models_names
 from communities_comparison.tf_idf import calc_tf_idf_all_models, calc_vocab_distribution
 from communities_comparison.compare import calc_scores_all_models
-from communities_comparison.clustering import cluster_communities, enrich_data
 import config as c
 import time
 from os.path import join
@@ -36,6 +35,16 @@ if __name__ == "__main__":
         # m_names = sorted(m_names)[:c.N]
         if c.APPLY_VOCAB_THRES:
             valid_m_names = calc_vocab_distribution(m_names=m_names)
+            # with open(join(c.vocab_distr_path, 'valid_m_names' + '.pickle'), 'wb') as handle:
+            #     pickle.dump(valid_m_names, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        elif c.LOAD_VALID_NAMES:
+            with open(join(c.vocab_distr_path, 'valid_m_names' + '.pickle'), 'rb') as handle:
+                valid_m_names = pickle.load(handle)
+            # valid_m_names.to_csv(join(c.vocab_distr_path, 'valid_m_names' + '.csv'))
+            print(f"valid_m_names: {len(valid_m_names)}, N: {c.N}")
+            assert (len(valid_m_names) == c.N)
+        else:
+            valid_m_names = m_names
         # valid_m_names = rn.sample(list(valid_m_names), c.N)
 
     print(f"\n1 - CALC_TF_IDF -> {c.CALC_TF_IDF}")
@@ -49,24 +58,7 @@ if __name__ == "__main__":
     start_2 = time.time()
     if c.CALC_SCORES:
         calc_scores_all_models(m_names=valid_m_names, m_type=c.MODEL_TYPE)
-    else:
-        with open(join(c.scores_path, c.metrics_f_name + '.pickle'), 'rb') as handle:
-            metrics = pickle.load(handle)
-        metrics.to_csv(join(c.scores_path, c.metrics_f_name + '.csv'))
     print(f"CALC_SCORES - elapsed time (min): {(time.time()-start_2)/60}")
 
-    print(f"\n3 - ENRICH_DATA -> {c.ENRICH_DATA}")
-    start_3 = time.time()
-    if c.ENRICH_DATA:
-        metrics = enrich_data(df=metrics, comms=valid_m_names)
-
-    print(f"ENRICH_DATA - elapsed time (min): {(time.time() - start_3) / 60}")
-
-    print(f"\n4 - CLUSTERING -> {c.CLUSTERING}")
-    start_4 = time.time()
-    if c.CLUSTERING:
-        cluster_communities(df=metrics)
-
-    print(f"CLUSTERING - elapsed time (min): {(time.time() - start_4) / 60}")
 
 

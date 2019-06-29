@@ -3,6 +3,8 @@ from os.path import join
 from gensim.models import Word2Vec, FastText
 import re
 import pickle
+import numpy as np
+import config as c
 
 
 def get_models_names(path, m_type):
@@ -16,15 +18,38 @@ def get_models_names(path, m_type):
 
 
 def load_model(path, m_type, name):
+    full_name = name + '_model_' + m_type + '.model'
     if m_type in ['2.01', '2.02', '2.03']:
-        return Word2Vec.load(join(path, name))
-    return FastText.load(join(path, name))
+        return Word2Vec.load(join(path, full_name))
+    return FastText.load(join(path, full_name))
 
 
 def load_tfidf(path, name):
-    f_name = 'tf_idf_' + name.replace('_1', '_2')
-    with open(join(path, f_name + '.pickle'), 'rb') as handle:
+    full_name = 'tf_idf_' + name + '_model_' + c.MODEL_TYPE + '.model'
+    if c.USE_TF_IDF_2_02:
+        full_name = 'tf_idf_' + name + '_model_' + '2.02' + '.model'
+        path = path.replace('2.03', '2.02')
+    with open(join(path, full_name + '.pickle'), 'rb') as handle:
         tfidf = pickle.load(handle)
     return tfidf
+
+
+def filter_pairs(lst):
+    lst_2 = [(x[1], x[2]) for x in lst]
+    to_filter = []
+    with open(join(c.vocab_distr_path, 'pairs_found' + '.txt')) as afile:
+        for s in afile:
+            s = s.split("\'")
+            to_filter.append((s[1], s[3]))
+    to_keep = set(lst_2) - set(to_filter)
+    n_lst = []
+    for i, (m1, m2) in enumerate(to_keep):
+        n_lst = n_lst + [(i + 1, m1, m2)]
+    print(f"original: {len(lst)}, to filter: {len(to_filter)}, filtered: {len(n_lst)}")
+    return n_lst
+
+
+
+
 
 

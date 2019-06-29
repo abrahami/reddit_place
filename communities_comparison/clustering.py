@@ -62,10 +62,8 @@ def add_rplace_participation(df):
 
 
 def enrich_data(df):
-    # todo- remove
     for col in ['name_m1', 'name_m2']:
         df[col] = df[col].apply(lambda x: x.replace('_model_' + c.MODEL_TYPE + '.model', ''))
-
     df['intersection/union'] = df['wc_inter']/(df['wc_m1']+df['wc_m2']-df['wc_inter'])
     df['intersection/union'] = df['intersection/union'].apply(lambda x: round(x, 5))
     sim_metric = 'cosine'
@@ -74,37 +72,62 @@ def enrich_data(df):
     return df
 
 
-def get_metric(df, comms, name):
+def get_cluster_members(df, sub_category, labels):
+    df['is_member'] = df['sub_category_' + sub_category].apply(lambda x: x in labels)
+    members = set(df['subreddit'][df['is_member']])
+
+    return members
+
+
+def get_cluster_data(df, dis_col, sub_category, labels, only_clus_members):
+    '''
+    
+    :param df: DataFrame. final results for all subreddits.
+    :param dis_col: String. the name of the distance column for sorting.
+    :param sub_category: String. '1' or '2'.
+    :param labels: List of strings. the labels representing the cluster.
+    :param only_clus_members: Boolean. whether to select pairs that are both belong to the cluster (AND).
+                              otherwise select pairs where at least one element belongs to the cluster (OR).
+    :return: DataFrame. results for selected cluster elements.
     '''
 
-    :param df: DataFrame. Distances between all pairs of communities
-    :param comms: List. cluster of communities (model names) to compare
-    :param name: String. cluster name
-    :return: Dict. scores
+    cols = df.columns.values
+    df['m1_in'] = df['sub_category_' + sub_category + '_m1'].apply(lambda x: x in labels)
+    df['m2_in'] = df['sub_category_' + sub_category + '_m2'].apply(lambda x: x in labels)
+    df['select'] = df.m1_in & df.m2_in if only_clus_members else df.m1_in | df.m2_in
+    ans = df.loc[df['select'], cols].sort_values(by=[dis_col]).reset_index(drop=True)
+
+    return ans
+
+
+def get_metrics(df, col):
     '''
 
-    df_comm = df[df.name_m1.isin(comms) & df.name_m2.isin(comms)]
-    avg_score = np.mean(df_comm['score'])
-    median_score = np.median(df_comm['score'])
+    :param df: DataFrame. final results for selected subreddits.
+    :param col: String. column name to for metrics calculations.
+    :return: (numeric, numeric, numeric, Numpy array)  (max, mean, median, distances)
+    '''
+    digits = 3
+    max_ = round(np.max(df[col]), digits)
+    mean_ = round(np.mean(df[col]), digits)
+    median_ = round(np.median(df[col]), digits)
+    distances_ = np.array(df[col])
 
-    res = {'cluster': name, 'avg_score': avg_score, 'median_score': median_score}
-    return res
-
-
-def cluster_communities(df):
-    clus_res = pd.DataFrame(columns=['name', 'avg_score', 'median_score'])
-
-    name = 'test_cluster'
-    lst = ['arma_model_2.02.model', 'iamverysmart_model_2.02.model', 'colombia_model_2.02.model']
-
-    res = get_metric(df=df, comms=lst, name=name)
-    clus_res = clus_res.append(res, ignore_index=True)
-
-    clus_res_name = 'clus_res_m_type_' + c.MODEL_TYPE + '_' + dt.datetime.now().strftime("%Y_%m_%d")
-    with open(join(c.scores_path, clus_res_name + '.pickle'), 'wb') as handle:
-        pickle.dump(clus_res, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    clus_res.to_csv(join(c.scores_path, clus_res_name + '.csv'), index=False)
+    return max_, mean_, median_, distances_
 
 
+# def cluster_communities(df):
+#     clus_res = pd.DataFrame(columns=['name', 'avg_score', 'median_score'])
+#
+#     name = 'test_cluster'
+#     lst = ['arma_model_2.02.model', 'iamverysmart_model_2.02.model', 'colombia_model_2.02.model']
+#
+#     res = get_metric(df=df, comms=lst, name=name)
+#     clus_res = clus_res.append(res, ignore_index=True)
+#
+#     clus_res_name = 'clus_res_m_type_' + c.MODEL_TYPE + '_' + dt.datetime.now().strftime("%Y_%m_%d")
+#     with open(join(c.scores_path, clus_res_name + '.pickle'), 'wb') as handle:
+#         pickle.dump(clus_res, handle, protocol=pickle.HIGHEST_PROTOCOL)
+#     clus_res.to_csv(join(c.scores_path, clus_res_name + '.csv'), index=False)
 
 
