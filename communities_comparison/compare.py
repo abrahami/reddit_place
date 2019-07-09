@@ -187,13 +187,18 @@ def calc_scores_all_models(m_names, m_type):
         lst = []
         for i, (m1, m2) in enumerate(combinations(iterable=m_names, r=2)):
             lst = lst + [(i+1, m1, m2)]
-        with open(join(c.scores_path, 'combinations_' + str(c.N) + '.pickle'), 'wb') as handle:
-            pickle.dump(lst, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        # with open(join(c.combinations_path, 'combinations__' + str(len(m_names)) + '.pickle'), 'wb') as handle:
+        #     pickle.dump(lst, handle, protocol=pickle.HIGHEST_PROTOCOL)
     else:
-        with open(join(c.scores_path, 'combinations_' + str(c.N) + '.pickle'), 'rb') as handle:
+        with open(join(c.combinations_path, 'combinations__' + str(len(m_names)) + '.pickle'), 'rb') as handle:
             lst = pickle.load(handle)
     if c.FILTER_PAIRS:
         lst = filter_pairs(lst=lst)
+        with open(join(c.combinations_path, 'combinations__after_filter_' + str(len(m_names)) + '_' + c.MODEL_TYPE
+                                            + '.pickle'), 'wb') as handle:
+            pickle.dump(lst, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        # with open(join(c.combinations_path, 'combinations__after_filter_' + str(len(m_names)) + '.pickle'), 'rb') as handle:
+        #     lst = pickle.load(handle)
     pool = mp.Pool(processes=c.CPU_COUNT)
     print('start compare')
     with pool as pool:
@@ -207,6 +212,7 @@ def calc_scores_all_models(m_names, m_type):
     with open(join(c.scores_path, metrics_f_name + '.pickle'), 'wb') as handle:
         pickle.dump(metrics, handle, protocol=pickle.HIGHEST_PROTOCOL)
     metrics.to_csv(join(c.scores_path, metrics_f_name + '.csv'), index=False)
+
 
 
 

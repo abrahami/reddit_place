@@ -14,7 +14,7 @@ print(f"MODEL_TYPE: {c.MODEL_TYPE}")
 print(f"LABELS_VERSION: {c.LABELS_VERSION}")
 labels = pd.read_csv(join(c.labels_path, 'labeled_subreddits_' + c.LABELS_VERSION + '.csv'))
 labels = labels[pd.notnull(labels.subreddit)]
-scores = pd.read_csv(join(c.scores_path, 'pairs_similarity_results' + '.csv'))
+scores = pd.read_csv(join(c.scores_path, 'pairs_similarity_results_' + c.MODEL_TYPE + '.csv'))
 # with open(join(c.scores_path, 'pairs_similarity_results' + '.pickle'), 'rb') as handle:
 #     scores = pickle.load(handle)
 scores = enrich_data(df=scores)
@@ -30,7 +30,7 @@ cols = ['name_m1', 'name_m2', 'score', 'intersection/union', 'users_rep_distance
 # cols = cols + ['sub_category_3_m1', 'sub_category_3_m2']
 res = df.loc[:, cols]
 # res = df
-name = 'pairs_similarity_general_' + c.LABELS_VERSION
+name = 'pairs_similarity_general_' + c.MODEL_TYPE + '_' + c.LABELS_VERSION
 res.to_csv(join(c.scores_path, name + '.csv'), index=False)
 
 # name = 'pairs_similarity_with_labels'

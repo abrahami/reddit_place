@@ -43,13 +43,15 @@ else:
 # endregion
 
 # AD_HOC_NAMES = ['patriots', 'greenbaypackers', 'womenfortrump']
-AD_HOC_NAMES = ['guitar', 'music', 'spongebob']
-# AD_HOC_NAMES = None
+# AD_HOC_NAMES = ['guitar', 'music', 'spongebob']
+AD_HOC_NAMES = None
 
 APPLY_VOCAB_THRES, CALC_VOCAB_DISTR = False, False
 LOAD_VALID_NAMES = True
-CALC_COMBINATIONS, FILTER_PAIRS = True, False
-CALC_TF_IDF, CALC_IDF, USE_TF_IDF_2_02 = False, False, False
-CALC_SCORES, CALC_DIS, SAVE_DIS_MATRIX = True, True, True
+CALC_COMBINATIONS, FILTER_PAIRS = False, True
+CALC_TF_IDF, CALC_IDF = False, False
+CALC_SCORES, CALC_DIS, SAVE_DIS_MATRIX = True, True, False
 # CALC_SCORES, CALC_DIS, SAVE_DIS_MATRIX = False, False, False
+
+
 

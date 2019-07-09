@@ -25,28 +25,34 @@ def load_model(path, m_type, name):
 
 
 def load_tfidf(path, name):
-    full_name = 'tf_idf_' + name + '_model_' + c.MODEL_TYPE + '.model'
-    if c.USE_TF_IDF_2_02:
-        full_name = 'tf_idf_' + name + '_model_' + '2.02' + '.model'
-        path = path.replace('2.03', '2.02')
+    full_name = 'tf_idf_' + name
+    if c.MODEL_TYPE == '2.02':
+        full_name = full_name + '_model_' + '2.02' + '.model'
     with open(join(path, full_name + '.pickle'), 'rb') as handle:
         tfidf = pickle.load(handle)
     return tfidf
 
 
 def filter_pairs(lst):
-    lst_2 = [(x[1], x[2]) for x in lst]
+    print('filter pairs')
+    # lst_2 = [(x[1], x[2]) for x in lst]
+    with open(join(c.combinations_path, 'lst_2' + '.pickle'), 'rb') as handle:
+        lst_2 = pickle.load(handle)
     to_filter = []
     with open(join(c.vocab_distr_path, 'pairs_found' + '.txt')) as afile:
         for s in afile:
             s = s.split("\'")
             to_filter.append((s[1], s[3]))
+            to_filter.append((s[3], s[1]))
+    with open(join(c.combinations_path, 'to_filter_' + str(len(lst)) + '_' + c.MODEL_TYPE + '.pickle'), 'wb') as handle:
+        pickle.dump(to_filter, handle, protocol=pickle.HIGHEST_PROTOCOL)
     to_keep = set(lst_2) - set(to_filter)
     n_lst = []
     for i, (m1, m2) in enumerate(to_keep):
         n_lst = n_lst + [(i + 1, m1, m2)]
-    print(f"original: {len(lst)}, to filter: {len(to_filter)}, filtered: {len(n_lst)}")
+    print(f"original: {len(lst)}, to filter: {len(to_filter)/2}, filtered: {len(n_lst)}")
     return n_lst
+
 
 
 
