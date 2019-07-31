@@ -79,6 +79,7 @@ labels_df = pd.read_csv(join(c.labels_path, 'labeled_subreddits_' + c.LABELS_VER
 
 # distance_col = 'score'
 distance_col = 'users_rep_distance'
+
 # mvu_test = 'greater'
 mvu_test = 'less'
 # mvu_test = 'two-sided'

@@ -7,14 +7,14 @@ import numpy as np
 import config as c
 
 
-def get_models_names(path, m_type):
+def get_models_names(path):
     """
 
     :param path: string. path of the files.
-    :param m_type: string. model type ('2.01', '2.02', '2.03')
     :return: List. models of selected type.
     """
-    return [f for f in os.listdir(path) if re.match(r".*_model_" + m_type + r"\.model$", f)]
+    lst = [f for f in os.listdir(path) if re.match(r".*_model_" + c.MODEL_TYPE + r"\.model$", f)]
+    return [x.replace('_model_' + c.MODEL_TYPE + '.model', '') for x in lst]
 
 
 def load_model(path, m_type, name):

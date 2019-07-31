@@ -68,8 +68,11 @@ generate_heatmaps('patriots', 'greenbaypackers', method_, partial=True)
 # # American Football  vs  News/Politics  --->  score = 0.962
 generate_heatmaps('patriots', 'womenfortrump', method_)
 
-# Music  vs  Music  --->  score = 0.130
+# guitar  vs  music  --->  score = 0.130
+# intersection/union = 0.382
 generate_heatmaps('guitar', 'music', method_, partial=True)
+# guitar  vs  spongebob (TV)  --->  score = 0.940
+# intersection/union = 0.084
 generate_heatmaps('guitar', 'spongebob', method_)
 
 

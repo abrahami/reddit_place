@@ -31,7 +31,7 @@ if __name__ == "__main__":
         print(f"AD_HOC_NAMES = {c.AD_HOC_NAMES}")
         valid_m_names = c.AD_HOC_NAMES
     else:
-        m_names = get_models_names(path=c.data_path, m_type=c.MODEL_TYPE)
+        m_names = get_models_names(path=c.data_path)
         # m_names = sorted(m_names)[:c.N]
         if c.APPLY_VOCAB_THRES:
             valid_m_names = calc_vocab_distribution(m_names=m_names)

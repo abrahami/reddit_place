@@ -87,6 +87,15 @@ def get_title(pearson_df, spearman_df, m1, m2):
     return t
 
 
+def get_label(measure):
+    if measure == 'score':
+        return 'ccc distance'
+    elif measure == 'intersection/union':
+        return measure
+    elif measure == 'users_rep_distance':
+        return 'users-based distance'
+
+
 def correlations_and_scatter(df, title):
     DPI = 100
     graph_color = "#3F5D7D"
@@ -123,8 +132,8 @@ def correlations_and_scatter(df, title):
         x_tick_labels_fs = 65  # 60 #55
         y_tick_labels_fs = 65  # 60 #55
 
-        ax[j].set_xlabel(x, fontsize=x_lable_fs, labelpad=x_pad)
-        ax[j].set_ylabel(y, fontsize=y_lable_fs, labelpad=y_pad)
+        ax[j].set_xlabel(get_label(x), fontsize=x_lable_fs, labelpad=x_pad)
+        ax[j].set_ylabel(get_label(y), fontsize=y_lable_fs, labelpad=y_pad)
         ax[j].xaxis.set_tick_params(labelsize=x_tick_labels_fs)
         ax[j].yaxis.set_tick_params(labelsize=y_tick_labels_fs)
 
@@ -178,7 +187,8 @@ res_name = 'pairs_similarity_general_' + c.MODEL_TYPE + '_' + c.LABELS_VERSION
 res_df = pd.read_csv(join(c.scores_path, res_name + '.csv'))
 labels_df = pd.read_csv(join(c.labels_path, 'labeled_subreddits_' + c.LABELS_VERSION + '.csv'))
 
-ti = 'Correlations - all communities'
+# ti = 'Correlations - all communities'
+ti = 'All communities'
 correlations_and_scatter(df=res_df, title=ti)
 
 categories = [['Sports'], ['Internet/Apps', 'Tech Related'], ['Music'], ['News/Politics'], ['Food']]
@@ -187,9 +197,12 @@ for cate in categories:
     sub_category = '1'
     res_sub = get_cluster_data(df=res_df, dis_col='score', sub_category=sub_category, labels=cate,
                                general_category=cate, only_clus_members=True)
-    ti = 'Correlations - ' + cate[0] + ' communities'
+    # ti = 'Correlations - ' + cate[0] + ' communities'
+    ti = cate[0] + ' communities'
     ti = ti.replace("/", " and ")
     correlations_and_scatter(df=res_sub, title=ti)
 
 print("DONE all")
+
+
 

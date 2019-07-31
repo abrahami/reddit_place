@@ -5,8 +5,8 @@ import platform as p
 
 
 LABELS_VERSION = 'V3'
-MODEL_TYPE = '2.02'
-# MODEL_TYPE = '2.03'
+# MODEL_TYPE = '2.02'
+MODEL_TYPE = '2.03'
 N = 1565
 # N = 200
 VOCAB_PERC_THRES = 20
@@ -54,4 +54,10 @@ CALC_SCORES, CALC_DIS, SAVE_DIS_MATRIX = True, True, False
 # CALC_SCORES, CALC_DIS, SAVE_DIS_MATRIX = False, False, False
 
 
-
+# import pickle
+# import numpy as np
+#
+# with open(join(vocab_distr_path, 'vocab_length_distribution' + '.pickle'), 'rb') as handle:
+#     vocab_d = pickle.load(handle)
+# min_vocab_length = np.percentile(a=vocab_d['vocab_length'], q=VOCAB_PERC_THRES)
+# print()
