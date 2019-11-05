@@ -1,0 +1,72 @@
+{
+	"model_version": "3.00",
+	"description": "Full run after fixing the bugs we had",
+	"random_seed": 1984,
+	"code_dir": {
+		"yalla": "/data/home/isabrah/reddit_canvas/reddit_project_with_yalla_cluster",
+		"ABRAHAMI-MOBL2": "C:\\Users\\ABRAHAMI\\Documents\\Private\\Uni\\BGU\\PhD\\reddit_canvas\\reddit_proj_with_yalla_cluster",
+		"AVRAHAMI-PC": "C:\\Users\\avrahami\\Documents\\Private\\Uni\\BGU\\PhD\\reddit_canvas\\reddit_proj_with_yalla_cluster"
+	},
+	"data_dir": {
+		"yalla": "/data/work/data/reddit_place",
+		"ABRAHAMI-MOBL2": "C:\\Users\\ABRAHAMI\\Documents\\Private\\Uni\\BGU\\PhD\\reddit_canvas\\data",
+		"AVRAHAMI-PC": "C:\\Users\\avrahami\\Documents\\Private\\Uni\\BGU\\PhD\\reddit_canvas\\data"
+	},
+	"model": {
+		"type": "w2v",
+		//"type": "fasttext",
+		"hyper_params": {
+			"size": 300,
+			"window": 5,
+			"sg": 0,
+			//relevant only to fasttext
+			//"word_ngrams": 2,
+			"negative": 5
+		}
+	},
+	"saving_options": {
+		//if set to False, we will first check if the model exists already
+		"overwrite_existing": "False"
+	},
+	"text_filters": {
+		"use_comments": "True",
+	    "ordering_logic": "score",
+        "sampling_rules": {
+          "sample_data": "True",
+          "min_abs_score": 2,
+          "max_posts": 500000
+        }
+	},
+	"biggest_srs_removal": {
+		"should_remove": "False",
+		"quantile": 0.05
+	},
+	"srs_filters":	{
+		"should_filter": "True",
+		"filter_non_english": "True",
+		"minimum_dict_size": 5000
+	},
+	"sentences_boosting": {
+		"should_boost": "True",
+		"max_boosting_factor": 4,
+		"trees_information_csv_path": {
+			"yalla": "/data/work/data/reddit_cmv/subr_map6.csv",
+			"AVRAHAMI-PC": "C:\\Users\\avrahami\\Documents\\Private\\Uni\\BGU\\PhD\\reddit_canvas\\data"
+		}
+	},
+	"doc2vec_config": {
+		"overwrite_existing": "False",
+		//-1 means no limit
+		"objects_limit": -1,
+		//"objects_limit": 10,
+		"epochs": 1,
+		"doc2vec_hyper_params": {
+			"vector_size": 100,
+			"window": 3,
+			"min_count": 3,
+			"sample": 1e-4,
+			"negative": 5,
+			"dm": 1
+		}
+	}
+}

@@ -1,0 +1,77 @@
+{
+  "model_version": "2.05",
+  "description": "Full run after fixing the bugs we had",
+  "random_seed": 1984,
+  "data_path": {
+    "yalla": "/data/work/data/reddit_place/embedding/embedding_per_sr",
+    "SSARUSI-MOBL1": "C:\\Users\\ssarusi\\Desktop\\second_degree\\semester_d\\NLP\\data",
+    "AVRAHAMI-PC": "C:\\Users\\avrahami\\Documents\\Private\\Uni\\BGU\\PhD\\reddit_canvas\\reddit_proj_with_yalla_cluster"
+	},
+  "users_data_path": {
+    "yalla": "/data/work/data/reddit_place",
+    "SSARUSI-MOBL1": "C:\\Users\\ssarusi\\Desktop\\second_degree\\semester_d\\NLP\\data",
+    "AVRAHAMI-PC": "C:\\Users\\avrahami\\Documents\\Private\\Uni\\BGU\\PhD\\reddit_canvas\\data"
+  },
+  "vocab_distr_path": {
+    "yalla": "/data/home/isabrah/3com_project_data/vocab_distribution",
+    "SSARUSI-MOBL1": "C:\\Users\\ssarusi\\Desktop\\second_degree\\semester_d\\NLP\\vocab_distribution",
+    "AVRAHAMI-PC": "C:\\Users\\avrahami\\Documents\\Private\\Uni\\BGU\\PhD\\reddit_canvas\\data"
+  },
+  "tf_idf_path": {
+    "yalla": "/data/home/isabrah/3com_project_data/tf_idf",
+    "SSARUSI-MOBL1": "C:\\Users\\ssarusi\\Desktop\\second_degree\\semester_d\\NLP\\tf_idf",
+    "AVRAHAMI-PC": "C:\\Users\\avrahami\\Documents\\Private\\Uni\\BGU\\PhD\\reddit_canvas\\data"
+  },
+  "scores_path": {
+    "yalla": "/data/home/isabrah/3com_project_data/scores",
+    "SSARUSI-MOBL1": "C:\\Users\\ssarusi\\Desktop\\second_degree\\semester_d\\NLP\\scores",
+    "AVRAHAMI-PC": "C:\\Users\\avrahami\\Documents\\Private\\Uni\\BGU\\PhD\\reddit_canvas\\data"
+  },
+  "dis_path": {
+    "yalla": "/data/home/isabrah/3com_project_data/distances",
+    "SSARUSI-MOBL1": "C:\\Users\\ssarusi\\Desktop\\second_degree\\semester_d\\NLP\\distances",
+    "AVRAHAMI-PC": "C:\\Users\\avrahami\\Documents\\Private\\Uni\\BGU\\PhD\\reddit_canvas\\data"
+  },
+  "combinations_path": {
+    "yalla": "/data/home/isabrah/3com_project_data/combinations",
+    "SSARUSI-MOBL1": "C:\\Users\\ssarusi\\Desktop\\second_degree\\semester_d\\NLP\\combinations",
+    "AVRAHAMI-PC": "C:\\Users\\avrahami\\Documents\\Private\\Uni\\BGU\\PhD\\reddit_canvas\\data"
+  },
+  "labels_path": {
+    "yalla": "/data/work/data/reddit_place/3com_labels/",
+    "SSARUSI-MOBL1": "",
+    "AVRAHAMI-PC": "C:\\Users\\avrahami\\Documents\\Private\\Uni\\BGU\\PhD\\reddit_canvas\\data"
+  },
+  "general_config": {
+    "labels_version": "V3",
+    "model_type": "2.05",
+    //"embedding_model_name": "fastext",
+    "embedding_model_name": "w2v",
+    "cpu_count": 50
+    //N=1565
+  },
+  "algo_parmas": {
+    "vocab_perc_thres": 20,
+    //"method": "union",
+    "method": "intersection",
+    "top_tf_idf_weights_perc": 0.25
+  },
+  "current_run_flags": {
+    //ad_hoc_names = ['patriots', 'greenbaypackers', 'womenfortrump']
+    "ad_hoc_names": "['guitar', 'music', 'spongebob']",
+    //"ad_hoc_names": "None",
+    "apply_vocab_thres": "True",
+    "calc_vocab_distr": "True",
+    "load_valid_names": "True",
+    "calc_combinations": "True",
+    //only used if some of the pairs were calculated already and some are still missing
+    "filter_pairs": "False",
+    "calc_tf_idf": "True",
+    "calc_idf": "True",
+    "calc_scores": "True",
+    "calc_dis": "True",
+    //this should be False most of the times, unless we ran a very small subset (if ad_hoc_names is not None, this can be True)
+    "save_dis_matrix": "False"
+  }
+
+}
